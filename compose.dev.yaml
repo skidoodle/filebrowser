@@ -1,0 +1,16 @@
+services:
+  filebrowser:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: dev
+    image: filebrowser:dev
+    container_name: filebrowser-dev
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+      - ./cache:/cache
+    env_file:
+      - .env

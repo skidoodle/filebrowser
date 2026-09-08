@@ -1,0 +1,24 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -tags dev -o ./tmp/main.exe ."
+  bin = "tmp/main.exe"
+  delay = 500
+  exclude_dir = ["data", "cache", "frontend", "bin", "tmp", ".filebrowser", ".github"]
+  exclude_regex = ["_test\\.go$"]
+  include_ext = ["go"]
+  kill_delay = "0s"
+  stop_on_error = true
+
+[color]
+  build = "yellow"
+  main = "magenta"
+  runner = "green"
+  watcher = "cyan"
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = true

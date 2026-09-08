@@ -1,0 +1,36 @@
+# Binaries
+/bin/
+/dist/
+/tmp/
+*.exe
+*.exe~
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Frontend
+frontend/node_modules/
+frontend/dist/*
+!frontend/dist/.gitkeep
+*.tsbuildinfo
+
+# Runtime data & logs
+/data/
+/cache/
+*.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Dependency directories
+/vendor/
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store

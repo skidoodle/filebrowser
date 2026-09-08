@@ -1,0 +1,159 @@
+@source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
+@import "@cloudflare/kumo/styles/tailwind";
+@import "tailwindcss";
+
+html,
+body,
+#root {
+    height: 100%;
+}
+
+body {
+    @apply bg-kumo-canvas text-kumo-default antialiased;
+}
+
+.scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--color-kumo-line) 75%, transparent) transparent;
+}
+
+@supports selector(::-webkit-scrollbar) {
+    .scrollbar-slim {
+        scrollbar-width: auto;
+        scrollbar-color: auto;
+    }
+
+    .scrollbar-slim::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .scrollbar-slim::-webkit-scrollbar-track,
+    .scrollbar-slim::-webkit-scrollbar-corner {
+        background: transparent;
+    }
+
+    .scrollbar-slim::-webkit-scrollbar-thumb {
+        border-radius: 9999px;
+        background-color: color-mix(in srgb, var(--color-kumo-line) 75%, transparent);
+    }
+
+    .scrollbar-slim::-webkit-scrollbar-thumb:hover {
+        background-color: var(--color-kumo-line);
+    }
+}
+
+.media-slider {
+    --media-fill: 0%;
+    --media-buffer: 100%;
+    --media-track: rgb(255 255 255 / 0.25);
+    --media-buffered: rgb(255 255 255 / 0.4);
+    appearance: none;
+    height: 1rem;
+    background: transparent;
+    cursor: pointer;
+}
+
+.media-slider::-webkit-slider-runnable-track {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: linear-gradient(to right,
+            var(--color-kumo-brand) 0 var(--media-fill),
+            var(--media-buffered) var(--media-fill) var(--media-buffer),
+            var(--media-track) var(--media-buffer) 100%);
+}
+
+.media-slider::-moz-range-track {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: linear-gradient(to right,
+            var(--color-kumo-brand) 0 var(--media-fill),
+            var(--media-buffered) var(--media-fill) var(--media-buffer),
+            var(--media-track) var(--media-buffer) 100%);
+}
+
+.media-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 0.875rem;
+    height: 0.875rem;
+    margin-top: -0.25rem;
+    border: none;
+    border-radius: 9999px;
+    background: white;
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
+    transition: transform 120ms ease-out;
+}
+
+.media-slider::-moz-range-thumb {
+    width: 0.875rem;
+    height: 0.875rem;
+    border: none;
+    border-radius: 9999px;
+    background: white;
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
+    transition: transform 120ms ease-out;
+}
+
+.media-slider:hover::-webkit-slider-thumb,
+.media-slider:active::-webkit-slider-thumb {
+    transform: scale(1.15);
+}
+
+.media-slider:hover::-moz-range-thumb,
+.media-slider:active::-moz-range-thumb {
+    transform: scale(1.15);
+}
+
+.media-slider:focus-visible {
+    outline: 2px solid var(--color-kumo-brand);
+    outline-offset: 2px;
+}
+
+.media-slider-light {
+    --media-track: var(--color-kumo-hairline);
+    --media-buffered: var(--color-kumo-tint);
+}
+
+.yarl__portal .yarl__slide_title_container {
+    top: auto;
+    bottom: 0;
+}
+
+@media (max-width: 640px) {
+
+    input,
+    textarea,
+    select {
+        font-size: 16px !important;
+    }
+}
+
+div.fixed.inset-0.bg-kumo-overlay {
+    z-index: 65;
+}
+
+div.fixed.w-full.max-w-2xl {
+    z-index: 70;
+}
+
+@media (max-width: 640px) {
+    div.fixed.w-full.max-w-2xl {
+        top: 0.75rem !important;
+        left: 0.75rem !important;
+        right: 0.75rem !important;
+        width: auto !important;
+        --tw-translate-x: 0 !important;
+        --tw-translate-y: 0 !important;
+        translate: 0 0 !important;
+        transform: none !important;
+        z-index: 70 !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .media-slider::-webkit-slider-thumb,
+    .media-slider::-moz-range-thumb {
+        transition: none;
+    }
+}

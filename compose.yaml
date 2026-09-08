@@ -1,0 +1,41 @@
+services:
+  filebrowser:
+    image: ghcr.io/skidoodle/filebrowser:latest
+    container_name: filebrowser
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+      - ./cache:/cache
+    environment:
+      # Directory served inside the container (default: /data)
+      - FILEBROWSER_ROOT=/data
+      # Listen address inside container (default: 0.0.0.0:8080)
+      - FILEBROWSER_ADDRESS=0.0.0.0:8080
+      # Optional URL subpath, e.g. /files (default: empty for root)
+      - FILEBROWSER_BASEURL=
+      # Maximum size for a single upload (default: 10GiB)
+      - FILEBROWSER_MAXUPLOAD=10GiB
+      # Directory for disposable thumbnails, previews, and signing key (default: /cache)
+      - FILEBROWSER_CACHEDIR=/cache
+      # Cutoff size for text/code preview detection (default: 10MiB)
+      - FILEBROWSER_MAXTEXTSIZE=10MiB
+      # Toggle abuse protection: rate limiting, honeypot, and PoW (default: true)
+      - FILEBROWSER_GUARD=true
+      # Comma-separated CIDRs of reverse proxies for X-Forwarded-For headers (default: empty)
+      - FILEBROWSER_TRUSTEDPROXIES=
+      # Per-IP API request budget per second (default: 60)
+      - FILEBROWSER_REQUESTRATE=60
+      # Per-IP raw download rate in bytes/sec (default: 200MiB)
+      - FILEBROWSER_DOWNLOADRATE=200MiB
+      # Proof-of-work difficulty for mutations (0 = disabled, default: 4)
+      - FILEBROWSER_POWDIFFICULTY=4
+      # Override capability HMAC secret (default: generated in cache dir across restarts)
+      - FILEBROWSER_SECRET=
+      # Insecure mode: disables auth, grants full access to everyone (default: false)
+      - FILEBROWSER_INSECURE=false
+      # Seed/reset admin password on startup (default: empty, prompts account creation)
+      - FILEBROWSER_ADMIN_PASSWORD=
+      # Enable verbose debug logging (default: false)
+      - FILEBROWSER_DEBUG=false

@@ -1,0 +1,12 @@
+.git
+.github
+bin/
+frontend/node_modules/
+frontend/dist/
+data/
+cache/
+coverage.out
+coverage.html
+*.log
+*.tmp
+*.tsbuildinfo

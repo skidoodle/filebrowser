@@ -1,0 +1,78 @@
+version: 2
+
+project_name: filebrowser
+
+before:
+  hooks:
+    - bun install --frozen-lockfile --cwd frontend
+    - bun run --cwd frontend build
+
+builds:
+  - id: filebrowser
+    main: .
+    binary: filebrowser
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .FullCommit }}
+      - -X main.date={{ .Date }}
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+dockers_v2:
+  - id: filebrowser
+    dockerfile: Dockerfile.release
+    images:
+      - ghcr.io/skidoodle/filebrowser
+    tags:
+      - "{{ .Tag }}"
+      - latest
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    build_args:
+      VERSION: "{{ .Version }}"
+      COMMIT: "{{ .FullCommit }}"
+    labels:
+      org.opencontainers.image.title: filebrowser
+      org.opencontainers.image.description: Stateless, guest-only web file browser
+      org.opencontainers.image.url: https://github.com/skidoodle/filebrowser
+      org.opencontainers.image.source: https://github.com/skidoodle/filebrowser
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+
+release:
+  draft: false
