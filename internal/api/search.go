@@ -18,7 +18,11 @@ import (
 // tolerate long walks over large trees.
 // Query: q (substring), type, ext, limit, path (walk root).
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
-	opts := searchOptions(r.URL.Query())
+	q := r.URL.Query()
+	if !s.canRead(w, r, q.Get("path")) {
+		return
+	}
+	opts := searchOptions(q)
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -40,7 +44,6 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return true
 	}
 
-	q := r.URL.Query()
 	ctx := r.Context()
 	done := make(chan struct{})
 	go heartbeat(ctx, done, write)

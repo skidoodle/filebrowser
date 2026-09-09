@@ -36,6 +36,29 @@ func TestTokensIssueVerify(t *testing.T) {
 	}
 }
 
+func TestTokensIssueVerifyForPath(t *testing.T) {
+	t.Parallel()
+	tk, err := NewTokens()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok := tk.IssueForPath("docs/test.txt", time.Minute)
+	if !tk.VerifyForPath(tok, "docs/test.txt") {
+		t.Fatal("fresh path token should verify for exact path")
+	}
+	if tk.VerifyForPath(tok, "docs/other.txt") {
+		t.Fatal("path token should not verify for a different path")
+	}
+	if tk.Verify(tok) {
+		t.Fatal("path token should not verify as general capability token")
+	}
+	// Expired
+	expired := tk.IssueForPath("docs/test.txt", -time.Second)
+	if tk.VerifyForPath(expired, "docs/test.txt") {
+		t.Fatal("expired path token should fail")
+	}
+}
+
 func TestPow(t *testing.T) {
 	t.Parallel()
 	challenge, err := RandomChallenge()

@@ -43,6 +43,10 @@ type Config struct {
 	// Secret overrides the capability signing key. When empty, a key is
 	// persisted in CacheDir so capability tokens survive restarts.
 	Secret string
+	// AccessPolicy controls whether anonymous visitors can write (public),
+	// view only (readonly), or are gated behind login (private).
+	// Default: "public".
+	AccessPolicy string
 	// Insecure disables admin authentication entirely: every visitor has
 	// full write access. Intended for local deployments only.
 	Insecure bool
@@ -68,9 +72,14 @@ func FromEnv() (*Config, error) {
 		DownloadRate:  200 << 20, // 200 MiB/s per IP
 		PowDifficulty: 4,
 		Secret:        getenv("SECRET", ""),
+		AccessPolicy:  strings.ToLower(getenv("ACCESS_POLICY", "public")),
 		Insecure:      getbool("INSECURE", false),
 		AdminPassword: getenv("ADMIN_PASSWORD", ""),
 		Dev:           getbool("DEBUG", false),
+	}
+
+	if cfg.AccessPolicy != "public" && cfg.AccessPolicy != "readonly" && cfg.AccessPolicy != "private" {
+		return nil, fmt.Errorf("config: FILEBROWSER_ACCESS_POLICY: invalid policy %q (must be public, readonly, or private)", cfg.AccessPolicy)
 	}
 
 	var err error

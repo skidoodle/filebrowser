@@ -490,3 +490,50 @@ func scanUserRows(row userScanner) (User, error) {
 	u.UpdatedAt = time.Unix(updated, 0)
 	return u, nil
 }
+
+// GetMeta retrieves a metadata key value from the meta table.
+// If the key is not found, it returns ("", nil).
+func (s *Store) GetMeta(key string) (string, error) {
+	var val string
+	err := s.db.QueryRowContext(context.Background(), `SELECT value FROM meta WHERE key = ?`, key).Scan(&val)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("store: get meta %s: %w", key, err)
+	}
+	return val, nil
+}
+
+// SetMeta sets a metadata key value in the meta table.
+func (s *Store) SetMeta(key, value string) error {
+	_, err := s.db.ExecContext(context.Background(),
+		`INSERT INTO meta(key, value) VALUES(?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
+	if err != nil {
+		return fmt.Errorf("store: set meta %s: %w", key, err)
+	}
+	return nil
+}
+
+// AccessPolicy returns the stored access policy ("public", "readonly", "private").
+// If unset, it falls back to def.
+func (s *Store) AccessPolicy(def string) (string, error) {
+	val, err := s.GetMeta("access_policy")
+	if err != nil {
+		return def, err
+	}
+	if val == "public" || val == "readonly" || val == "private" {
+		return val, nil
+	}
+	return def, nil
+}
+
+// SetAccessPolicy updates the persisted access policy.
+func (s *Store) SetAccessPolicy(policy string) error {
+	policy = strings.ToLower(policy)
+	if policy != "public" && policy != "readonly" && policy != "private" {
+		return ErrInvalid
+	}
+	return s.SetMeta("access_policy", policy)
+}

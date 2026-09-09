@@ -137,8 +137,8 @@ func TestRoleEndpointMatrix(t *testing.T) {
 		cookie string
 		want   int
 	}{
-		// Anonymous: all writes rejected.
-		{"anon create dir", http.MethodPost, epDir, `{"path":"x"}`, "", http.StatusUnauthorized},
+		// Anonymous in public policy: creation allowed, mutations of existing items or admin ops rejected.
+		{"anon create dir", http.MethodPost, epDir, `{"path":"x"}`, "", http.StatusCreated},
 		{"anon delete", http.MethodPost, epDelete, `{"paths":["a"]}`, "", http.StatusUnauthorized},
 		{"anon save", http.MethodPut, "/api/raw?path=a", "d", "", http.StatusUnauthorized},
 		{"anon private", http.MethodPost, "/api/private", `{"path":"a"}`, "", http.StatusUnauthorized},
@@ -277,7 +277,7 @@ func searchResults(t *testing.T, ts *httptest.Server, cookie string) string {
 
 func TestScopedTusUploads(t *testing.T) {
 	t.Parallel()
-	ts, _, _ := newTestServerCfg(t, testServerConfig{Seed: seedAdminPass, Users: permTestUsers()})
+	ts, _, _ := newTestServerCfg(t, testServerConfig{Seed: seedAdminPass, Users: permTestUsers(), AccessPolicy: "readonly"})
 	_, aliceCookie, bobCookie := loginRoles(t, ts)
 
 	tusCreate := func(path, cookie string) int {

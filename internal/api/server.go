@@ -18,50 +18,70 @@ import (
 	"github.com/skidoodle/filebrowser/internal/config"
 	"github.com/skidoodle/filebrowser/internal/guard"
 	"github.com/skidoodle/filebrowser/internal/storage"
+	"github.com/skidoodle/filebrowser/internal/store"
 )
 
 // Server wires configuration, storage and the HTTP mux together.
 type Server struct {
-	cfg     *config.Config
-	store   storage.Storage
-	log     *slog.Logger
-	web     fs.FS
-	version string
-	commit  string
-	guard   *guard.Guard
-	auth    *auth.Manager
-	authz   *authz.Engine
-	mux     *http.ServeMux
-	tus     *tusRegistry
+	cfg      *config.Config
+	store    storage.Storage
+	appStore *store.Store
+	log      *slog.Logger
+	web      fs.FS
+	version  string
+	commit   string
+	guard    *guard.Guard
+	tokens   *guard.Tokens
+	auth     *auth.Manager
+	authz    *authz.Engine
+	mux      *http.ServeMux
+	tus      *tusRegistry
 }
 
 // Options configures a new Server.
 type Options struct {
-	Config  *config.Config
-	Store   storage.Storage
-	Log     *slog.Logger
-	Web     fs.FS
-	Version string
-	Commit  string
-	Guard   *guard.Guard
-	Auth    *auth.Manager
-	Authz   *authz.Engine
+	Config   *config.Config
+	Store    storage.Storage
+	AppStore *store.Store
+	Log      *slog.Logger
+	Web      fs.FS
+	Version  string
+	Commit   string
+	Guard    *guard.Guard
+	Auth     *auth.Manager
+	Authz    *authz.Engine
 }
 
 // New builds the server and its routing table.
 func New(o Options) (*Server, error) {
+	var tokens *guard.Tokens
+	if o.Guard != nil && o.Guard.Tokens != nil {
+		tokens = o.Guard.Tokens
+	} else {
+		var err error
+		tokens, err = guard.NewTokens()
+		if err != nil {
+			return nil, err
+		}
+	}
+	appSt := o.AppStore
+	if appSt == nil && o.Auth != nil {
+		appSt = o.Auth.Store()
+	}
 	s := &Server{
-		cfg:     o.Config,
-		store:   o.Store,
-		log:     o.Log,
-		web:     o.Web,
-		version: o.Version,
-		commit:  o.Commit,
-		guard:   o.Guard,
-		auth:    o.Auth,
-		authz:   o.Authz,
-		mux:     http.NewServeMux(),
-		tus:     newTusRegistry(o.Store, o.Log, o.Config.MaxUpload, 3*time.Hour),
+		cfg:      o.Config,
+		store:    o.Store,
+		appStore: appSt,
+		log:      o.Log,
+		web:      o.Web,
+		version:  o.Version,
+		commit:   o.Commit,
+		guard:    o.Guard,
+		tokens:   tokens,
+		auth:     o.Auth,
+		authz:    o.Authz,
+		mux:      http.NewServeMux(),
+		tus:      newTusRegistry(o.Store, o.Log, o.Config.MaxUpload, 3*time.Hour),
 	}
 	if err := s.routes(); err != nil {
 		return nil, err
@@ -71,37 +91,42 @@ func New(o Options) (*Server, error) {
 
 // routes registers every endpoint on the mux.
 func (s *Server) routes() error {
+	// Static web assets (the Vite-built React SPA). When nil, assets are
+	// served by the Vite dev server during development.
 	s.mux.HandleFunc("GET /api/health", s.handleHealth)
+
+	// Public reads (gated by authz inside the handlers).
+	s.mux.HandleFunc("GET /api/me", s.handleMe)
 	s.mux.HandleFunc("GET /api/list", s.handleList)
 	s.mux.HandleFunc("GET /api/meta", s.handleMeta)
-	s.mux.HandleFunc("GET /api/usage", s.handleUsage)
 	s.mux.HandleFunc("GET /api/raw", s.handleRaw)
 	s.mux.HandleFunc("GET /api/download", s.handleDownload)
 	s.mux.HandleFunc("GET /api/search", s.handleSearch)
-	s.mux.HandleFunc("GET /api/subtitle", s.handleSubtitle)
+	s.mux.HandleFunc("GET /api/usage", s.handleUsage)
 	s.mux.HandleFunc("GET /api/thumb", s.handleThumb)
 	s.mux.HandleFunc("GET /api/big", s.handleBig)
+	s.mux.HandleFunc("GET /api/subtitle", s.handleSubtitle)
 	s.mux.HandleFunc("/api/capability", s.handleCapability)
-	s.mux.HandleFunc("GET /api/me", s.handleMe)
+
+	// Auth operations.
 	s.mux.HandleFunc("POST /api/auth/setup", s.handleAuthSetup)
 	s.mux.HandleFunc("POST /api/auth/login", s.handleAuthLogin)
 	s.mux.HandleFunc("POST /api/auth/logout", s.handleAuthLogout)
 	s.mux.Handle("POST /api/auth/password", s.write(http.HandlerFunc(s.handleAuthPassword)))
 
-	// Mutations require a capability token minted by the SPA plus write
-	// permission on the target path (guests have none; scoped users inside
-	// their scope).
-	s.mux.Handle("POST /api/dir", s.write(s.capability(http.HandlerFunc(s.handleCreateDir))))
-	s.mux.Handle("POST /api/file", s.write(s.capability(http.HandlerFunc(s.handleCreateFile))))
-	s.mux.Handle("POST /api/tus", s.write(s.capability(http.HandlerFunc(s.handleTusCreate))))
+	// Mutations require a capability token minted by the SPA.
+	// Creation endpoints allow anonymous visitors when access policy is public.
+	s.mux.Handle("POST /api/dir", s.writeCreation(s.capability(http.HandlerFunc(s.handleCreateDir))))
+	s.mux.Handle("POST /api/file", s.writeCreation(s.capability(http.HandlerFunc(s.handleCreateFile))))
+	s.mux.Handle("POST /api/tus", s.writeCreation(s.capability(http.HandlerFunc(s.handleTusCreate))))
 	s.mux.Handle("PATCH /api/tus/{id}", s.capability(http.HandlerFunc(s.handleTusPatch)))
 	s.mux.Handle("DELETE /api/tus/{id}", s.capability(http.HandlerFunc(s.handleTusDelete)))
 
 	// Mutating file operations: authenticated writers with permission on
-	// the target (admin anywhere, scoped users inside their scope).
+	// the target (admin anywhere, scoped users inside their scope), or valid edit token.
 	s.mux.Handle("POST /api/delete", s.write(http.HandlerFunc(s.handleDelete)))
 	s.mux.Handle("POST /api/move", s.write(http.HandlerFunc(s.handleMove)))
-	s.mux.Handle("PUT /api/raw", s.write(http.HandlerFunc(s.handleSave)))
+	s.mux.Handle("PUT /api/raw", s.capability(http.HandlerFunc(s.handleSave)))
 	s.mux.HandleFunc("HEAD /api/tus/{id}", s.handleTusHead)
 	s.mux.HandleFunc("OPTIONS /api/tus", s.handleTusOptions)
 	s.mux.HandleFunc("OPTIONS /api/tus/{id}", s.handleTusOptions)
@@ -115,6 +140,10 @@ func (s *Server) routes() error {
 	s.mux.Handle("POST /api/users", s.admin(http.HandlerFunc(s.handleCreateUser)))
 	s.mux.Handle("PATCH /api/users/{id}", s.admin(http.HandlerFunc(s.handleUpdateUser)))
 	s.mux.Handle("DELETE /api/users/{id}", s.admin(http.HandlerFunc(s.handleDeleteUser)))
+
+	// Access policy management.
+	s.mux.Handle("GET /api/settings/policy", s.admin(http.HandlerFunc(s.handleGetPolicy)))
+	s.mux.Handle("PUT /api/settings/policy", s.admin(http.HandlerFunc(s.handleSetPolicy)))
 
 	if s.web != nil {
 		s.mux.Handle("/", s.spaHandler())

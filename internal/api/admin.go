@@ -4,6 +4,9 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"strings"
+
+	"github.com/skidoodle/filebrowser/internal/authz"
 )
 
 // maxDeleteBatch bounds how many paths a single delete request may carry.
@@ -98,7 +101,7 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSave streams the request body over an existing or new file.
-// Admin-only. Query: path. The body is size-capped like an upload.
+// Admin/writer or valid short-lived edit token. Query: path.
 func (s *Server) handleSave(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	if path == "" {
@@ -108,9 +111,16 @@ func (s *Server) handleSave(w http.ResponseWriter, r *http.Request) {
 	if rejectReservedRoot(w, path) {
 		return
 	}
-	if !s.canWrite(w, r, path) {
+	if !sameOrigin(r) {
+		apiError(w, http.StatusForbidden, "cross-origin request rejected")
 		return
 	}
+
+	r, ok := s.authorizeSave(w, r, path)
+	if !ok {
+		return
+	}
+
 	if r.Body == nil {
 		apiError(w, http.StatusBadRequest, "missing body")
 		return
@@ -127,4 +137,64 @@ func (s *Server) handleSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, info)
+}
+
+// authorizeSave authorizes a write to path: either a valid edit token
+// minted for that path (anonymous, public policy) or an authenticated
+// writer session. Returns the request, possibly with the session
+// identity stashed in its context, and whether the write may proceed.
+func (s *Server) authorizeSave(w http.ResponseWriter, r *http.Request, path string) (*http.Request, bool) {
+	editToken := r.Header.Get("X-Edit-Token")
+	if editToken != "" && s.accessPolicy() == policyPublic && s.tokens != nil && s.tokens.VerifyForPath(editToken, path) {
+		if s.authz != nil && !s.cfg.Insecure && s.authz.CanRead(authz.Actor{}, path) != nil {
+			apiError(w, http.StatusNotFound, "not found")
+			return r, false
+		}
+		return r, true
+	}
+	id, ok := s.authenticate(w, r)
+	if !ok {
+		return r, false
+	}
+	r = withIdentity(r, id)
+	return r, s.canWrite(w, r, path)
+}
+
+// handleGetPolicy returns the active access policy ("public", "readonly", "private"). Admin-only.
+func (s *Server) handleGetPolicy(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"access_policy": s.accessPolicy(),
+	})
+}
+
+// handleSetPolicy updates the active access policy. Admin-only.
+// Body: {"access_policy": "public" | "readonly" | "private"}.
+func (s *Server) handleSetPolicy(w http.ResponseWriter, r *http.Request) {
+	if s.appStore == nil {
+		apiError(w, http.StatusInternalServerError, "store unavailable")
+		return
+	}
+	var body struct {
+		AccessPolicy string `json:"access_policy"`
+	}
+	if err := decodeJSONBody(r, &body, 4<<10); err != nil {
+		apiError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	policy := strings.ToLower(strings.TrimSpace(body.AccessPolicy))
+	switch policy {
+	case policyPublic, policyReadonly, policyPrivate:
+		// valid
+	default:
+		apiError(w, http.StatusBadRequest, "invalid access policy: must be public, readonly, or private")
+		return
+	}
+	if err := s.appStore.SetAccessPolicy(policy); err != nil {
+		respondErr(w, err)
+		return
+	}
+	s.log.Info("access policy updated", "access_policy", policy)
+	writeJSON(w, http.StatusOK, map[string]string{
+		"access_policy": policy,
+	})
 }

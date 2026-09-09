@@ -125,15 +125,16 @@ func run() error {
 	}
 
 	srv, err := api.New(api.Options{
-		Config:  cfg,
-		Store:   fsStore,
-		Log:     log,
-		Web:     web,
-		Version: version,
-		Commit:  commit,
-		Guard:   grd,
-		Auth:    mgr,
-		Authz:   eng,
+		Config:   cfg,
+		Store:    fsStore,
+		AppStore: st,
+		Log:      log,
+		Web:      web,
+		Version:  version,
+		Commit:   commit,
+		Guard:    grd,
+		Auth:     mgr,
+		Authz:    eng,
 	})
 	if err != nil {
 		return err

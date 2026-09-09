@@ -13,6 +13,7 @@ import (
 	"github.com/skidoodle/filebrowser/internal/auth"
 	"github.com/skidoodle/filebrowser/internal/authz"
 	"github.com/skidoodle/filebrowser/internal/config"
+	"github.com/skidoodle/filebrowser/internal/guard"
 	"github.com/skidoodle/filebrowser/internal/storage"
 	"github.com/skidoodle/filebrowser/internal/storage/local"
 	"github.com/skidoodle/filebrowser/internal/store"
@@ -28,9 +29,11 @@ func newAuthTestServer(t *testing.T, seed, insecure string) (*httptest.Server, *
 
 // testServerConfig describes a test server beyond the defaults.
 type testServerConfig struct {
-	Seed      string
-	Insecure  bool
-	MaxUpload int64
+	Seed         string
+	Insecure     bool
+	MaxUpload    int64
+	AccessPolicy string
+	Guard        bool
 	// Users are created after setup: name, password, admin, scope.
 	Users []testUser
 }
@@ -51,11 +54,12 @@ func newTestServerCfg(t *testing.T, tc testServerConfig) (*httptest.Server, stor
 		maxUpload = 1 << 20
 	}
 	cfg := &config.Config{
-		Root:      t.TempDir(),
-		Address:   "127.0.0.1:0",
-		MaxUpload: maxUpload,
-		CacheDir:  t.TempDir(),
-		Insecure:  tc.Insecure,
+		Root:         t.TempDir(),
+		Address:      "127.0.0.1:0",
+		MaxUpload:    maxUpload,
+		CacheDir:     t.TempDir(),
+		Insecure:     tc.Insecure,
+		AccessPolicy: tc.AccessPolicy,
 	}
 	log := slog.New(slog.DiscardHandler)
 	fsStore, err := local.New(cfg.Root)
@@ -81,7 +85,17 @@ func newTestServerCfg(t *testing.T, tc testServerConfig) (*httptest.Server, stor
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv, err := New(Options{Config: cfg, Store: fsStore, Log: log, Version: "test", Auth: mgr, Authz: eng})
+	var grd *guard.Guard
+	if tc.Guard {
+		grd, err = guard.New(guard.Config{
+			CacheDir:    t.TempDir(),
+			RequestRate: 100,
+		}, log)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	srv, err := New(Options{Config: cfg, Store: fsStore, AppStore: st, Log: log, Version: "test", Auth: mgr, Authz: eng, Guard: grd})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -355,7 +369,7 @@ func TestTusOverrideGatedBehindAdmin(t *testing.T) {
 		t.Fatalf("seed save = %d", res.StatusCode)
 	}
 
-	// Guest tus create with override=true → 401 (uploads need an account).
+	// Guest tus create with override=true → 403 (overwriting requires an account).
 	upload := func(hdr map[string]string) (int, string) {
 		req := newTestReq(t, http.MethodPost, ts.URL+"/api/tus?path=exists.txt&override=true", nil)
 		req.Header.Set("Upload-Length", "3")
@@ -366,8 +380,8 @@ func TestTusOverrideGatedBehindAdmin(t *testing.T) {
 		defer func() { _ = res.Body.Close() }()
 		return res.StatusCode, res.Header.Get("Location")
 	}
-	if got, _ := upload(nil); got != http.StatusUnauthorized {
-		t.Fatalf("guest override = %d, want 401", got)
+	if got, _ := upload(nil); got != http.StatusForbidden {
+		t.Fatalf("guest override = %d, want 403", got)
 	}
 	code, loc := upload(map[string]string{cookieHeader: cookie, hdrOrigin: ts.URL})
 	if code != http.StatusCreated {
@@ -396,5 +410,237 @@ func TestSetupOnlyBeforeInit(t *testing.T) {
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("weak setup = %d, want 400", res.StatusCode)
+	}
+}
+
+func TestAccessPolicy(t *testing.T) {
+	t.Parallel()
+	ts, _, _ := newTestServerCfg(t, testServerConfig{Seed: seedAdminPass})
+	adminCookie := loginAs(t, ts, "admin", seedAdminPass)
+
+	// Phases run in order: each changes the policy for the next one,
+	// so they must stay sequential.
+	testAccessPolicyPublic(t, ts)
+	testAccessPolicyReadonly(t, ts, adminCookie)
+	testAccessPolicyPrivate(t, ts, adminCookie)
+}
+
+// setAccessPolicy updates the access policy; cookie may be empty for
+// anonymous requests. Returns the response status code.
+func setAccessPolicy(t *testing.T, ts *httptest.Server, policy, cookie string) int {
+	t.Helper()
+	req := newTestReq(t, http.MethodPut, ts.URL+"/api/settings/policy", strings.NewReader(`{"access_policy":"`+policy+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(hdrOrigin, ts.URL)
+	if cookie != "" {
+		req.Header.Set(cookieHeader, cookie)
+	}
+	r := do(t, req)
+	_ = r.Body.Close()
+	return r.StatusCode
+}
+
+// anonCreateFileWithToken creates a file anonymously and returns the
+// edit token from the response.
+func anonCreateFileWithToken(t *testing.T, ts *httptest.Server, path string) (string, int) {
+	t.Helper()
+	req := newTestReq(t, http.MethodPost, ts.URL+"/api/file", strings.NewReader(`{"path":"`+path+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(hdrOrigin, ts.URL)
+	res := do(t, req)
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusCreated {
+		return "", res.StatusCode
+	}
+	var fileResp struct {
+		EditToken string `json:"edit_token"`
+	}
+	_ = json.NewDecoder(res.Body).Decode(&fileResp)
+	return fileResp.EditToken, res.StatusCode
+}
+
+// anonSaveWithToken saves content to path using an edit token.
+func anonSaveWithToken(t *testing.T, ts *httptest.Server, path, token string) int {
+	t.Helper()
+	req := newTestReq(t, http.MethodPut, ts.URL+"/api/raw?path="+path, strings.NewReader("hello world"))
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set(hdrOrigin, ts.URL)
+	req.Header.Set("X-Edit-Token", token)
+	res := do(t, req)
+	_ = res.Body.Close()
+	return res.StatusCode
+}
+
+// testAccessPolicyPublic covers anonymous behavior under the default
+// public policy: free create/save with edit tokens, delete still denied.
+func testAccessPolicyPublic(t *testing.T, ts *httptest.Server) {
+	t.Helper()
+
+	// /api/me reports default access policy "public"
+	code, body := getJSON(t, ts.URL+"/api/me", nil)
+	if code != http.StatusOK {
+		t.Fatalf("me = %d", code)
+	}
+	if body["access_policy"] != "public" {
+		t.Fatalf("me.AccessPolicy = %v, want public", body["access_policy"])
+	}
+
+	// Anonymous can create a directory
+	res := postJSON(t, ts, "/api/dir", `{"path":"pubdir"}`, nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("anon create dir = %d, want 201", res.StatusCode)
+	}
+
+	// Anonymous create file receives an edit token
+	token, status := anonCreateFileWithToken(t, ts, "pubfile.txt")
+	if status != http.StatusCreated || token == "" {
+		t.Fatalf("anon create file = %d token=%q, want 201 + token", status, token)
+	}
+
+	// Anonymous save using edit_token succeeds
+	if got := anonSaveWithToken(t, ts, "pubfile.txt", token); got != http.StatusOK {
+		t.Fatalf("anon save with edit_token = %d, want 200", got)
+	}
+
+	// Anonymous save on different path with same token fails (401)
+	if got := anonSaveWithToken(t, ts, "other.txt", token); got != http.StatusUnauthorized {
+		t.Fatalf("anon save wrong path = %d, want 401", got)
+	}
+
+	// Anonymous delete is rejected
+	res = postJSON(t, ts, "/api/delete", `{"paths":["pubfile.txt"]}`, nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anon delete = %d, want 401", res.StatusCode)
+	}
+}
+
+// testAccessPolicyReadonly switches to readonly policy: only admins may
+// change policy, anonymous users can read but not create.
+func testAccessPolicyReadonly(t *testing.T, ts *httptest.Server, adminCookie string) {
+	t.Helper()
+
+	if got := setAccessPolicy(t, ts, "readonly", ""); got != http.StatusUnauthorized {
+		t.Fatalf("anon set policy = %d, want 401", got)
+	}
+	if got := setAccessPolicy(t, ts, "readonly", adminCookie); got != http.StatusOK {
+		t.Fatalf("admin set policy = %d, want 200", got)
+	}
+
+	listCode, _ := getJSON(t, ts.URL+"/api/list?path=.", nil)
+	if listCode != http.StatusOK {
+		t.Fatalf("anon list in readonly = %d, want 200", listCode)
+	}
+
+	req := newTestReq(t, http.MethodPost, ts.URL+"/api/dir", strings.NewReader(`{"path":"readonly_dir"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(hdrOrigin, ts.URL)
+	res := do(t, req)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anon create dir in readonly = %d, want 401", res.StatusCode)
+	}
+}
+
+// testAccessPolicyPrivate switches to private policy: anonymous callers
+// are locked out entirely, admins keep full access.
+func testAccessPolicyPrivate(t *testing.T, ts *httptest.Server, adminCookie string) {
+	t.Helper()
+
+	if got := setAccessPolicy(t, ts, "private", adminCookie); got != http.StatusOK {
+		t.Fatalf("admin set policy private = %d, want 200", got)
+	}
+
+	for _, c := range []struct{ name, url string }{
+		{"list", "/api/list?path=."},
+		{"meta", "/api/meta?path=pubfile.txt"},
+		{"usage", "/api/usage"},
+	} {
+		code, _ := getJSON(t, ts.URL+c.url, nil)
+		if code != http.StatusUnauthorized {
+			t.Fatalf("anon %s in private = %d, want 401", c.name, code)
+		}
+	}
+
+	// Admin with cookie can still list and read in private mode
+	adminListCode, _ := getJSON(t, ts.URL+"/api/list?path=.", map[string]string{cookieHeader: adminCookie})
+	if adminListCode != http.StatusOK {
+		t.Fatalf("admin list in private = %d, want 200", adminListCode)
+	}
+}
+
+func TestAnonymousCreateAndSaveWithGuard(t *testing.T) {
+	t.Parallel()
+	ts, _, _ := newTestServerCfg(t, testServerConfig{
+		Seed:         seedAdminPass,
+		AccessPolicy: "public",
+		Guard:        true,
+	})
+
+	// 1. Get capability token
+	capReq := newTestReq(t, http.MethodGet, ts.URL+"/api/capability", nil)
+	capRes := do(t, capReq)
+	defer func() { _ = capRes.Body.Close() }()
+	if capRes.StatusCode != http.StatusOK {
+		t.Fatalf("get capability = %d, want 200", capRes.StatusCode)
+	}
+	var capData struct {
+		Capability string `json:"capability"`
+	}
+	_ = json.NewDecoder(capRes.Body).Decode(&capData)
+	if capData.Capability == "" {
+		t.Fatal("expected capability token")
+	}
+
+	// 2. Anonymous create file without capability fails (403 capability required)
+	createNoCap := newTestReq(t, http.MethodPost, ts.URL+"/api/file", strings.NewReader(`{"path":"guardnote.txt"}`))
+	createNoCap.Header.Set("Content-Type", "application/json")
+	createNoCap.Header.Set(hdrOrigin, ts.URL)
+	resNoCap := do(t, createNoCap)
+	_ = resNoCap.Body.Close()
+	if resNoCap.StatusCode != http.StatusForbidden {
+		t.Fatalf("create without capability = %d, want 403", resNoCap.StatusCode)
+	}
+
+	// 3. Anonymous create file with capability succeeds and returns edit_token
+	createWithCap := newTestReq(t, http.MethodPost, ts.URL+"/api/file", strings.NewReader(`{"path":"guardnote.txt"}`))
+	createWithCap.Header.Set("Content-Type", "application/json")
+	createWithCap.Header.Set(hdrOrigin, ts.URL)
+	createWithCap.Header.Set("X-Capability", capData.Capability)
+	resWithCap := do(t, createWithCap)
+	defer func() { _ = resWithCap.Body.Close() }()
+	if resWithCap.StatusCode != http.StatusCreated {
+		t.Fatalf("create with capability = %d, want 201", resWithCap.StatusCode)
+	}
+	var fileResp struct {
+		EditToken string `json:"edit_token"`
+	}
+	_ = json.NewDecoder(resWithCap.Body).Decode(&fileResp)
+	if fileResp.EditToken == "" {
+		t.Fatal("expected edit_token in response")
+	}
+
+	// 4. Anonymous save with edit_token BUT without X-Capability fails (403 capability required)
+	saveNoCap := newTestReq(t, http.MethodPut, ts.URL+"/api/raw?path=guardnote.txt", strings.NewReader("content"))
+	saveNoCap.Header.Set("Content-Type", "text/plain")
+	saveNoCap.Header.Set(hdrOrigin, ts.URL)
+	saveNoCap.Header.Set("X-Edit-Token", fileResp.EditToken)
+	resSaveNoCap := do(t, saveNoCap)
+	_ = resSaveNoCap.Body.Close()
+	if resSaveNoCap.StatusCode != http.StatusForbidden {
+		t.Fatalf("save without capability = %d, want 403", resSaveNoCap.StatusCode)
+	}
+
+	// 5. Anonymous save with BOTH edit_token AND X-Capability succeeds (200 OK)
+	saveWithBoth := newTestReq(t, http.MethodPut, ts.URL+"/api/raw?path=guardnote.txt", strings.NewReader("saved content"))
+	saveWithBoth.Header.Set("Content-Type", "text/plain")
+	saveWithBoth.Header.Set(hdrOrigin, ts.URL)
+	saveWithBoth.Header.Set("X-Edit-Token", fileResp.EditToken)
+	saveWithBoth.Header.Set("X-Capability", capData.Capability)
+	resSaveWithBoth := do(t, saveWithBoth)
+	_ = resSaveWithBoth.Body.Close()
+	if resSaveWithBoth.StatusCode != http.StatusOK {
+		t.Fatalf("save with both tokens = %d, want 200", resSaveWithBoth.StatusCode)
 	}
 }

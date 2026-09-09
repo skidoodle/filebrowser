@@ -17,6 +17,19 @@ import (
 // the resolved identity to handlers.
 type identityKey struct{}
 
+// Access policy values ("public", "readonly", "private").
+const (
+	policyPublic   = "public"
+	policyReadonly = "readonly"
+	policyPrivate  = "private"
+)
+
+// insecureIdentity is the identity granted to every caller when the
+// server runs in insecure (auth-disabled) mode.
+func insecureIdentity() auth.Identity {
+	return auth.Identity{Username: "insecure", Admin: true}
+}
+
 // withIdentity stores id in the request context.
 func withIdentity(r *http.Request, id auth.Identity) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), identityKey{}, id))
@@ -38,7 +51,7 @@ func (s *Server) readerActor(r *http.Request) authz.Actor {
 		return toActor(id)
 	}
 	if s.cfg.Insecure {
-		return toActor(auth.Identity{Username: "insecure", Admin: true})
+		return toActor(insecureIdentity())
 	}
 	if s.auth != nil {
 		if id, err := s.identity(r); err == nil {
@@ -53,16 +66,36 @@ func toActor(id auth.Identity) authz.Actor {
 	return authz.Actor{UserID: id.UserID, Admin: id.Admin, Scope: id.Scope}
 }
 
+// accessPolicy returns the effective access policy ("public", "readonly", "private").
+// Priority: SQLite meta table > FILEBROWSER_ACCESS_POLICY config > default "public".
+func (s *Server) accessPolicy() string {
+	if s.appStore != nil {
+		p, err := s.appStore.AccessPolicy(s.cfg.AccessPolicy)
+		if err == nil && p != "" {
+			return p
+		}
+	}
+	if s.cfg != nil && s.cfg.AccessPolicy != "" {
+		return s.cfg.AccessPolicy
+	}
+	return policyPublic
+}
+
 // handleMe reports the caller's capabilities: admin status, username and
-// scope, and whether onboarding is pending.
+// scope, access policy, and whether onboarding is pending.
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	resp := struct {
-		Admin       bool   `json:"admin"`
-		Insecure    bool   `json:"insecure"`
-		Initialized bool   `json:"initialized"`
-		Username    string `json:"username,omitempty"`
-		Scope       string `json:"scope,omitempty"`
-	}{Insecure: s.cfg.Insecure, Initialized: true}
+		Admin        bool   `json:"admin"`
+		Insecure     bool   `json:"insecure"`
+		Initialized  bool   `json:"initialized"`
+		Username     string `json:"username,omitempty"`
+		Scope        string `json:"scope,omitempty"`
+		AccessPolicy string `json:"access_policy"`
+	}{
+		Insecure:     s.cfg.Insecure,
+		Initialized:  true,
+		AccessPolicy: s.accessPolicy(),
+	}
 
 	if s.cfg.Insecure {
 		resp.Admin = true
@@ -165,7 +198,7 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, _ *http.Request) {
 // grants admin to everyone.
 func (s *Server) identity(r *http.Request) (auth.Identity, error) {
 	if s.cfg.Insecure {
-		return auth.Identity{Username: "insecure", Admin: true}, nil
+		return insecureIdentity(), nil
 	}
 	if s.auth == nil {
 		return auth.Identity{}, auth.ErrInvalidCredentials
@@ -181,7 +214,7 @@ func (s *Server) identity(r *http.Request) (auth.Identity, error) {
 // grants admin to everyone. Returns (identity, ok).
 func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) (auth.Identity, bool) {
 	if s.cfg.Insecure {
-		return auth.Identity{Username: "insecure", Admin: true}, true
+		return insecureIdentity(), true
 	}
 	if s.auth == nil {
 		apiError(w, http.StatusInternalServerError, "auth unavailable")
@@ -197,6 +230,32 @@ func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) (auth.Iden
 		return auth.Guest, false
 	}
 	return id, true
+}
+
+// writeCreation wraps creation endpoints (POST /api/dir, POST /api/file, POST /api/tus):
+// allows authenticated sessions, or anonymous visitors when access policy is "public".
+func (s *Server) writeCreation(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !sameOrigin(r) {
+			apiError(w, http.StatusForbidden, "cross-origin request rejected")
+			return
+		}
+		if s.cfg.Insecure {
+			next.ServeHTTP(w, withIdentity(r, insecureIdentity()))
+			return
+		}
+		if s.auth != nil {
+			if id, err := s.identity(r); err == nil {
+				next.ServeHTTP(w, withIdentity(r, id))
+				return
+			}
+		}
+		if s.accessPolicy() != policyPublic {
+			apiError(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
+		next.ServeHTTP(w, withIdentity(r, auth.Guest))
+	})
 }
 
 // write wraps mutation handlers: it requires an authenticated session (or
@@ -228,17 +287,21 @@ func (s *Server) admin(next http.Handler) http.Handler {
 }
 
 // canWrite enforces write permission on a target path inside a mutation
-// handler. Mapping: anonymous → 401, out-of-scope → 403, someone else's
-// private folder → 404 (hidden, never 403).
+// handler. Mapping: anonymous → 401 (unless policy is public and target is public),
+// out-of-scope → 403, someone else's private folder → 404 (hidden, never 403).
 func (s *Server) canWrite(w http.ResponseWriter, r *http.Request, path string) bool {
 	if s.cfg.Insecure {
 		return true
+	}
+	actor := toActor(requestIdentity(r))
+	if actor.UserID == 0 {
+		return s.canWriteAnonymous(w, path)
 	}
 	if s.authz == nil {
 		apiError(w, http.StatusInternalServerError, "authz unavailable")
 		return false
 	}
-	err := s.authz.CanWrite(toActor(requestIdentity(r)), path)
+	err := s.authz.CanWrite(actor, path)
 	switch {
 	case err == nil:
 		return true
@@ -254,13 +317,45 @@ func (s *Server) canWrite(w http.ResponseWriter, r *http.Request, path string) b
 	return false
 }
 
-// canRead enforces read visibility on a path: private folders of others
-// answer 404 so their existence is never revealed.
-func (s *Server) canRead(w http.ResponseWriter, r *http.Request, path string) bool {
-	if s.cfg.Insecure || s.authz == nil {
+// canWriteAnonymous authorizes an anonymous write: allowed only when the
+// access policy is public and the target is not inside someone else's
+// private folder.
+func (s *Server) canWriteAnonymous(w http.ResponseWriter, path string) bool {
+	if s.accessPolicy() != policyPublic {
+		apiError(w, http.StatusUnauthorized, "authentication required")
+		return false
+	}
+	if s.authz == nil {
 		return true
 	}
-	err := s.authz.CanRead(s.readerActor(r), path)
+	err := s.authz.CanRead(authz.Actor{}, path)
+	switch {
+	case err == nil:
+		return true
+	case errors.Is(err, authz.ErrPrivate):
+		apiError(w, http.StatusNotFound, "not found")
+	default:
+		respondErr(w, err)
+	}
+	return false
+}
+
+// canRead enforces read visibility on a path: in private access policy,
+// anonymous callers get 401; private folders of others answer 404 so their
+// existence is never revealed.
+func (s *Server) canRead(w http.ResponseWriter, r *http.Request, path string) bool {
+	if s.cfg.Insecure {
+		return true
+	}
+	actor := s.readerActor(r)
+	if s.accessPolicy() == policyPrivate && actor.UserID == 0 && !actor.Admin {
+		apiError(w, http.StatusUnauthorized, "authentication required")
+		return false
+	}
+	if s.authz == nil {
+		return true
+	}
+	err := s.authz.CanRead(actor, path)
 	if err == nil {
 		return true
 	}

@@ -81,6 +81,15 @@ func (t *Tokens) Issue(dur time.Duration) string {
 	return exp + "." + hex.EncodeToString(mac)
 }
 
+// IssueForPath mints a scoped capability token for a specific path valid for dur.
+// Used for temporary edit sessions granted upon creating a new file.
+func (t *Tokens) IssueForPath(path string, dur time.Duration) string {
+	exp := strconv.FormatInt(time.Now().Add(dur).Unix(), 16)
+	payload := exp + ":" + path
+	mac := t.mac(payload)
+	return exp + "." + hex.EncodeToString(mac)
+}
+
 // Verify checks signature and expiry.
 func (t *Tokens) Verify(token string) bool {
 	expHex, macHex, ok := strings.Cut(token, ".")
@@ -92,6 +101,27 @@ func (t *Tokens) Verify(token string) bool {
 		return false
 	}
 	if !hmac.Equal(t.mac(expHex), mac) {
+		return false
+	}
+	exp, err := strconv.ParseInt(expHex, 16, 64)
+	if err != nil || time.Now().Unix() > exp {
+		return false
+	}
+	return true
+}
+
+// VerifyForPath checks signature and expiry of a path-scoped capability token.
+func (t *Tokens) VerifyForPath(token, path string) bool {
+	expHex, macHex, ok := strings.Cut(token, ".")
+	if !ok || len(macHex) != sha256.Size*2 {
+		return false
+	}
+	mac, err := hex.DecodeString(macHex)
+	if err != nil {
+		return false
+	}
+	payload := expHex + ":" + path
+	if !hmac.Equal(t.mac(payload), mac) {
 		return false
 	}
 	exp, err := strconv.ParseInt(expHex, 16, 64)

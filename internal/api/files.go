@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/skidoodle/filebrowser/internal/authz"
 	"github.com/skidoodle/filebrowser/internal/storage"
@@ -139,6 +140,13 @@ func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 
 // handleUsage reports used and total bytes of the backing volume.
 func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
+	if !s.cfg.Insecure && s.accessPolicy() == policyPrivate {
+		actor := s.readerActor(r)
+		if actor.UserID == 0 && !actor.Admin {
+			apiError(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
+	}
 	usage, err := s.store.Usage(r.Context())
 	if err != nil {
 		respondErr(w, err)
@@ -153,8 +161,38 @@ func (s *Server) handleCreateDir(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleCreateFile creates a new empty file. Body: {"path": "..."}.
+// Returns FileInfo with an edit_token so the creator can immediately edit/save it.
 func (s *Server) handleCreateFile(w http.ResponseWriter, r *http.Request) {
-	s.create(w, r, s.store.CreateFile)
+	var body struct {
+		Path string `json:"path"`
+	}
+	if err := decodeJSONBody(r, &body, 4<<10); err != nil {
+		apiError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if rejectReservedRoot(w, body.Path) {
+		return
+	}
+	if !s.canWrite(w, r, body.Path) {
+		return
+	}
+	info, err := s.store.CreateFile(r.Context(), body.Path)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			apiError(w, http.StatusConflict, "already exists")
+			return
+		}
+		respondErr(w, err)
+		return
+	}
+	resp := struct {
+		storage.FileInfo
+		EditToken string `json:"edit_token,omitempty"`
+	}{FileInfo: info}
+	if s.tokens != nil {
+		resp.EditToken = s.tokens.IssueForPath(body.Path, 15*time.Minute)
+	}
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 func (s *Server) create(w http.ResponseWriter, r *http.Request, fn func(ctx context.Context, path string) (storage.FileInfo, error)) {

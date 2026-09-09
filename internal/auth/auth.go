@@ -110,6 +110,11 @@ func (m *Manager) Initialized() bool {
 	return err == nil && n > 0
 }
 
+// Store returns the underlying SQLite store.
+func (m *Manager) Store() *store.Store {
+	return m.st
+}
+
 // hashPassword bcrypts a password with the package cost.
 func hashPassword(password string) ([]byte, error) {
 	return bcrypt.GenerateFromPassword([]byte(password), bcryptCost)

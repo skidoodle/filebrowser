@@ -256,3 +256,28 @@ func TestUserDeletionCascadesPrivateFolders(t *testing.T) {
 		t.Fatalf("private marks survived cascade: %+v err=%v", priv, err)
 	}
 }
+
+func TestAccessPolicy(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	// Defaults to def when unset
+	pol, err := s.AccessPolicy("public")
+	if err != nil || pol != "public" {
+		t.Fatalf("default access policy = %q err=%v, want public", pol, err)
+	}
+
+	// Update to readonly
+	if err := s.SetAccessPolicy("readonly"); err != nil {
+		t.Fatalf("SetAccessPolicy readonly: %v", err)
+	}
+	pol, err = s.AccessPolicy("public")
+	if err != nil || pol != "readonly" {
+		t.Fatalf("got access policy = %q err=%v, want readonly", pol, err)
+	}
+
+	// Invalid policy rejected
+	if err := s.SetAccessPolicy("invalid_mode"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("expected ErrInvalid for bad policy, got %v", err)
+	}
+}
