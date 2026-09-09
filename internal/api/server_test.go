@@ -56,9 +56,13 @@ func TestSPAHandlerConfiguresBaseURL(t *testing.T) {
 
 	web := fstest.MapFS{
 		"index.html": {
-			Data: []byte(`<meta name="filebrowser-base" content=""><script src="/assets/app.js"></script>`),
+			Data: []byte(`<meta name="filebrowser-base" content=""><script src="/assets/app.js"></script>` +
+				`<link rel="icon" href="/favicon.svg"><link rel="icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png">`),
 		},
-		"assets/app.js": {Data: []byte("app javascript")},
+		"assets/app.js":        {Data: []byte("app javascript")},
+		"favicon.ico":          {Data: []byte("icon")},
+		"favicon.svg":          {Data: []byte("svg icon")},
+		"apple-touch-icon.png": {Data: []byte("touch icon")},
 	}
 	s := &Server{
 		cfg: &config.Config{BaseURL: "/share"},
@@ -82,11 +86,29 @@ func TestSPAHandlerConfiguresBaseURL(t *testing.T) {
 	if !strings.Contains(body, `src="/share/assets/app.js"`) {
 		t.Fatalf("index asset URL is missing base URL: %q", body)
 	}
+	for _, name := range []string{"favicon.ico", "favicon.svg", "apple-touch-icon.png"} {
+		if !strings.Contains(body, `href="/share/`+name+`"`) {
+			t.Fatalf("index %s URL is missing base URL: %q", name, body)
+		}
+	}
 
 	req = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/share/assets/app.js", nil)
 	res = httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
 	if body := res.Body.String(); body != "app javascript" {
 		t.Fatalf("asset body = %q, want app javascript", body)
+	}
+
+	// Favicon files are served as-is from the dist root.
+	for _, name := range []string{"favicon.ico", "favicon.svg", "apple-touch-icon.png"} {
+		req = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/share/"+name, nil)
+		res = httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		if res.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, want %d", name, res.Code, http.StatusOK)
+		}
+		if res.Body.String() == "app shell" {
+			t.Fatalf("%s fell through to the SPA shell", name)
+		}
 	}
 }

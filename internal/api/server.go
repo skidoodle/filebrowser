@@ -262,5 +262,10 @@ func (s *Server) configureSPAIndex(index []byte) []byte {
 		[]byte(`name="filebrowser-base" content="`+baseURL+`"`),
 		1,
 	)
-	return bytes.ReplaceAll(index, []byte(`"/assets/`), []byte(`"`+baseURL+`/assets/`))
+	index = bytes.ReplaceAll(index, []byte(`"/assets/`), []byte(`"`+baseURL+`/assets/`))
+	// Root-level static assets from the Vite public directory.
+	for _, name := range []string{"favicon.ico", "favicon.svg", "apple-touch-icon.png"} {
+		index = bytes.ReplaceAll(index, []byte(`"/`+name+`"`), []byte(`"`+baseURL+`/`+name+`"`))
+	}
+	return index
 }
