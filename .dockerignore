@@ -10,3 +10,5 @@ coverage.html
 *.log
 *.tmp
 *.tsbuildinfo
+*.db*
+*.key
