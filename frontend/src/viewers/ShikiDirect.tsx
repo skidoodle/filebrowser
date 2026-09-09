@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { usePrefs } from "../stores/prefs";
+import { useEffectiveTheme } from "../stores/prefs";
 
 export function ShikiDirect({ code, lang }: { code: string; lang: string }) {
-  const theme = usePrefs((s) => s.theme);
+  const effectiveTheme = useEffectiveTheme();
   const [html, setHtml] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const shikiTheme = theme === "dark" ? "vesper" : "github-light";
+    const shikiTheme = effectiveTheme === "dark" ? "github-dark" : "github-light";
     void import("shiki")
       .then((shiki) => shiki.codeToHtml(code, { lang, theme: shikiTheme }))
       .then((out) => {
@@ -26,14 +26,28 @@ export function ShikiDirect({ code, lang }: { code: string; lang: string }) {
     return () => {
       cancelled = true;
     };
-  }, [code, lang, theme]);
+  }, [code, lang, effectiveTheme]);
 
-  if (html === null) return <p className="text-kumo-subtle p-4">highlighting…</p>;
+  if (html === null) return <p className="text-kumo-subtle p-4 font-mono text-sm">loading…</p>;
+
+  const lines = code.split("\n");
+  const isSingleLine = lines.length <= 1;
 
   return (
-    <div
-      className="text-kumo-default p-4 text-sm [&_pre]:bg-transparent! [&_pre]:p-0 [&_pre]:font-mono"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    <div className="flex p-4 font-mono text-sm leading-relaxed">
+      {!isSingleLine && (
+        <div className="text-kumo-subtle select-none pr-4 text-right opacity-40">
+          {lines.map((_, i) => (
+            <div key={i} className="leading-relaxed">
+              {i + 1}
+            </div>
+          ))}
+        </div>
+      )}
+      <div
+        className="text-kumo-default min-w-0 flex-1 overflow-x-auto [&_pre]:bg-transparent! [&_pre]:p-0! [&_pre]:m-0! [&_pre]:font-mono [&_pre]:text-sm [&_pre]:leading-relaxed! [&_code]:font-mono [&_code]:text-sm [&_code]:leading-relaxed!"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </div>
   );
 }

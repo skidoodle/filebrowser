@@ -1,17 +1,12 @@
-import { CodeHighlighted, ShikiProvider, type LanguageInput } from "@cloudflare/kumo/code";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { auth } from "../api/auth";
 import { canWritePath } from "../lib/permissions";
+import { hasEditToken } from "../lib/tokens";
+import { useRoute } from "../lib/router";
 import { EditorShell } from "./EditorShell";
 import { ShikiDirect } from "./ShikiDirect";
-
-const KUMO_LANGS: LanguageInput[] = [
-  "javascript", "typescript", "jsx", "tsx", "json", "jsonc", "html", "css",
-  "python", "yaml", "markdown", "graphql", "sql", "bash", "shell", "diff",
-  "hcl", "toml",
-];
 
 const EXT_TO_LANG: Record<string, string> = {
   ts: "typescript", tsx: "tsx", mts: "typescript", cts: "typescript",
@@ -47,10 +42,6 @@ const LANG_LABELS: Record<string, string> = {
   asm: "Assembly", zig: "Zig", nim: "Nim", solidity: "Solidity", vue: "Vue",
 };
 
-function isKumoLang(lang: string): lang is LanguageInput {
-  return (KUMO_LANGS as string[]).includes(lang);
-}
-
 /** Files above this size skip Shiki highlighting and render as plain text. */
 const PLAIN_TEXT_MAX = 2 * 1024 * 1024;
 
@@ -64,12 +55,17 @@ export function CodeViewer({
   size?: number;
 }) {
   const [code, setCode] = useState<string | null>(null);
-  const [draft, setDraft] = useState<string | null>(null);
+  const route = useRoute();
+
+  const [draft, setDraft] = useState<string | null>(
+    route.page === "viewer" && route.edit ? "" : null,
+  );
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const me = useQuery({ queryKey: ["me"], queryFn: auth.me, staleTime: 60_000 });
-  const canEdit = canWritePath(me.data, path);
+  const hasToken = hasEditToken(path);
+  const canEdit = canWritePath(me.data, path) || hasToken || draft !== null;
 
   useEffect(() => {
     let cancelled = false;
@@ -90,19 +86,43 @@ export function CodeViewer({
   }, [path]);
 
   const save = useMutation({
-    mutationFn: () => api.save(path, draft ?? code ?? ""),
-    onSuccess: () => {
+    mutationFn: async ({ exit = true }: { exit?: boolean } = {}) => {
+      const content = draft ?? code ?? "";
+      await api.save(path, content);
+      return { content, exit };
+    },
+    onSuccess: ({ content, exit }) => {
+      setCode(content);
+      if (exit) {
+        setDraft(null);
+      } else {
+        setDraft(content);
+      }
       void queryClient.invalidateQueries({ queryKey: ["meta", path] });
       void queryClient.invalidateQueries({ queryKey: ["list"] });
-      setDraft(null);
     },
   });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (canEdit && draft !== null && !save.isPending) {
+          save.mutate({ exit: true });
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [canEdit, draft, save]);
 
   if (error) return <p className="text-kumo-danger p-6">{error}</p>;
   if (code === null) return <p className="text-kumo-subtle p-6">loading…</p>;
 
-  const lang = EXT_TO_LANG[(extension ?? "").toLowerCase()] ?? "";
-  const highlight = size !== undefined && size <= PLAIN_TEXT_MAX;
+  const ext = (extension ?? "").toLowerCase();
+  const lang = EXT_TO_LANG[ext] ?? "";
+  const isPlain = !lang || lang === "plaintext" || ext === "txt" || ext === "text" || ext === "log";
+  const highlight = !isPlain && size !== undefined && size <= PLAIN_TEXT_MAX;
 
   const langLabel = !highlight
     ? "Plain text"
@@ -121,36 +141,44 @@ export function CodeViewer({
       dirty={draft !== null && draft !== code}
       saveError={save.error instanceof Error ? save.error.message : null}
       onToggleEdit={() => setDraft(draft !== null ? null : code)}
-      onSave={() => save.mutate()}
+      onSave={() => save.mutate({ exit: true })}
     >
       {draft !== null ? (
         <textarea
+          autoFocus
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           spellCheck={false}
-          className="text-kumo-default bg-kumo-base h-full min-h-0 w-full resize-none p-4 font-mono text-sm leading-5 outline-none"
+          className="text-kumo-default bg-kumo-base h-full min-h-0 w-full resize-none p-4 font-mono text-sm leading-relaxed outline-none"
         />
       ) : !highlight ? (
         <PlainText code={code} />
-      ) : isKumoLang(lang) ? (
-        <ShikiProvider engine="javascript" languages={KUMO_LANGS}>
-          <CodeHighlighted
-            code={code}
-            lang={lang}
-            showLineNumbers
-            className="p-4 [&_pre]:bg-transparent!"
-          />
-        </ShikiProvider>
       ) : (
-        <ShikiDirect code={code} lang={lang || "plaintext"} />
+        <ShikiDirect code={code} lang={lang} />
       )}
     </EditorShell>
   );
 }
 
-/** Highlight-free rendering for huge files */
+/** Highlight-free rendering for plain text and huge files */
 function PlainText({ code }: { code: string }) {
+  const lines = code.split("\n");
+  const isSingleLine = lines.length <= 1;
+
   return (
-    <pre className="text-kumo-default p-4 font-mono text-sm leading-5">{code}</pre>
+    <div className="flex p-4 font-mono text-sm leading-relaxed">
+      {!isSingleLine && (
+        <div className="text-kumo-subtle select-none pr-4 text-right opacity-40">
+          {lines.map((_, i) => (
+            <div key={i} className="leading-relaxed">
+              {i + 1}
+            </div>
+          ))}
+        </div>
+      )}
+      <pre className="text-kumo-default min-w-0 flex-1 overflow-x-auto whitespace-pre font-mono text-sm leading-relaxed">
+        {code}
+      </pre>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"mime"
 	"net/http"
 
@@ -35,6 +36,13 @@ func (s *Server) handleRaw(w http.ResponseWriter, r *http.Request) {
 	// .mkv/.ac3/.ai to registry entries that browsers handle worse (or not
 	// at all - .ai renders as PDF only when labeled application/pdf).
 	h.Set("Content-Type", info.MimeType)
+	// Always revalidate, with a strong ETag: Last-Modified only has
+	// second granularity, so a save landing in the same second as a
+	// cached response would otherwise be answered with 304 and a stale
+	// body forever. The ETag (modtime nanos + size) catches same-second
+	// changes while still allowing cheap 304s for unchanged files.
+	h.Set("Cache-Control", "no-cache")
+	h.Set("ETag", fmt.Sprintf(`"%x-%x"`, info.ModTime.UnixNano(), info.Size))
 
 	// Charge the payload against the client's download budget.
 	if s.guard != nil && !s.guard.AllowDownload(r, info.Size) {

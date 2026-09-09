@@ -122,7 +122,7 @@ function ViewerBody({ path, file, onClose }: { path: string; file: FileMeta; onC
         if (ext === "md" || ext === "markdown" || ext === "mdx") {
           return <MarkdownPreview path={path} />;
         }
-        return <CodeViewer path={path} extension={file.extension} size={file.size} />;
+        return <CodeViewer key={path} path={path} extension={file.extension} size={file.size} />;
       case "pdf":
         return <PdfViewer path={path} />;
       case "video":
