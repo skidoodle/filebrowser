@@ -74,12 +74,22 @@ export default function App() {
     }
   }, [me.data, settingsTab, signedIn, dir]);
 
+  // Private access policy requires sign-in for everything.
+  useEffect(() => {
+    if (me.data && me.data.access_policy === "private" && !signedIn && loginMode === null) {
+      navigate({ page: "auth", mode: "login", dir }, { replace: true });
+    }
+  }, [me.data, signedIn, loginMode, dir]);
+
   if (loginMode !== null) {
     return <AuthScreen key={loginMode} mode={loginMode} />;
   }
 
-  // The user-management tab is admin-only; everyone else gets profile.
-  const effectiveTab = settingsTab === "users" && me.data && !me.data.admin ? "profile" : settingsTab;
+  // The user-management and policy tabs are admin-only; everyone else gets profile.
+  const effectiveTab =
+    (settingsTab === "users" || settingsTab === "policy") && me.data && !me.data.admin
+      ? "profile"
+      : settingsTab;
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -118,7 +128,13 @@ export default function App() {
         kind={newKind}
         dir={dir}
         onClose={() => navigate({ page: "files", dir }, { replace: true })}
-        onCreate={() => navigate({ page: "files", dir }, { replace: true })}
+        onCreate={(createdPath, createdKind) => {
+          if (createdKind === "file") {
+            navigate({ page: "viewer", path: createdPath, dir, edit: true }, { replace: true });
+          } else {
+            navigate({ page: "files", dir }, { replace: true });
+          }
+        }}
       />
       <ViewerOverlay />
     </div>

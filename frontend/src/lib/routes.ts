@@ -1,9 +1,9 @@
-export type SettingsTab = "profile" | "users";
+export type SettingsTab = "profile" | "users" | "policy";
 export type CreateKind = "dir" | "file";
 
 export type AppRoute =
   | { page: "files"; dir: string }
-  | { page: "viewer"; path: string; dir: string }
+  | { page: "viewer"; path: string; dir: string; edit?: boolean }
   | { page: "create"; kind: CreateKind; dir: string }
   | { page: "settings"; tab: SettingsTab; dir: string }
   | { page: "auth"; mode: "login" | "setup"; dir: string };
@@ -78,7 +78,7 @@ export function routePath(route: AppRoute): string {
   }
 }
 
-function routeFromPath(pathname: string, backgroundDir?: string): AppRoute | null {
+function routeFromPath(pathname: string, backgroundDir?: string, backgroundEdit?: boolean): AppRoute | null {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0) return { page: "files", dir: "." };
 
@@ -87,7 +87,9 @@ function routeFromPath(pathname: string, backgroundDir?: string): AppRoute | nul
       if (segments.length < 2) return null;
       const path = decodeStoragePath(segments.slice(1));
       if (path === null || path === ".") return null;
-      return { page: "viewer", path, dir: backgroundDir ?? parentDirectory(path) };
+      const route: AppRoute = { page: "viewer", path, dir: backgroundDir ?? parentDirectory(path) };
+      if (backgroundEdit) route.edit = true;
+      return route;
     }
     case "new": {
       const kind = segments[1] === "folder" ? "dir" : segments[1] === "file" ? "file" : null;
@@ -98,7 +100,7 @@ function routeFromPath(pathname: string, backgroundDir?: string): AppRoute | nul
     case "settings": {
       if (segments.length > 2) return null;
       const tab = segments[1] ?? "profile";
-      if (tab !== "profile" && tab !== "users") return null;
+      if (tab !== "profile" && tab !== "users" && tab !== "policy") return null;
       return { page: "settings", tab, dir: backgroundDir ?? "." };
     }
     case "login":
@@ -115,11 +117,11 @@ function routeFromPath(pathname: string, backgroundDir?: string): AppRoute | nul
 }
 
 /** Returns null when a location is not an application route. */
-export function matchRoute(pathname: string, backgroundDir?: string): AppRoute | null {
-  return routeFromPath(pathname, backgroundDir);
+export function matchRoute(pathname: string, backgroundDir?: string, backgroundEdit?: boolean): AppRoute | null {
+  return routeFromPath(pathname, backgroundDir, backgroundEdit);
 }
 
 /** Parses a location, falling back to the root browser for malformed input. */
-export function parseRoute(pathname: string, backgroundDir?: string): AppRoute {
-  return matchRoute(pathname, backgroundDir) ?? { page: "files", dir: "." };
+export function parseRoute(pathname: string, backgroundDir?: string, backgroundEdit?: boolean): AppRoute {
+  return matchRoute(pathname, backgroundDir, backgroundEdit) ?? { page: "files", dir: "." };
 }

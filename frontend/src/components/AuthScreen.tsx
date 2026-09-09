@@ -4,6 +4,7 @@ import { ArrowLeftIcon, HardDrivesIcon } from "@phosphor-icons/react";
 import { useState, type SubmitEvent } from "react";
 import { auth } from "../api/auth";
 import { navigate, useRoute } from "../lib/router";
+import { useMe } from "../lib/useMe";
 
 interface AuthScreenProps {
   mode: "setup" | "login";
@@ -15,6 +16,7 @@ export function AuthScreen({ mode }: AuthScreenProps) {
   const [confirm, setConfirm] = useState("");
   const queryClient = useQueryClient();
   const route = useRoute();
+  const me = useMe();
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -35,6 +37,8 @@ export function AuthScreen({ mode }: AuthScreenProps) {
     (mode === "setup" && (confirm !== password || password.length < 8)) ||
     submit.isPending;
 
+  const canGoBack = mode === "login" && me.data?.access_policy !== "private";
+
   const onBack = () => {
     navigate({ page: "files", dir: route.dir || "." }, { replace: true });
   };
@@ -48,7 +52,7 @@ export function AuthScreen({ mode }: AuthScreenProps) {
     <div className="bg-kumo-canvas flex h-full items-center justify-center p-6">
       <form onSubmit={onSubmit} className="bg-kumo-base ring-kumo-hairline w-full max-w-sm rounded-2xl p-8 shadow-sm ring-1">
         <div className="mb-6 flex items-center gap-3">
-          {mode === "login" && (
+          {canGoBack && (
             <Button
               type="button"
               variant="ghost"
@@ -68,7 +72,9 @@ export function AuthScreen({ mode }: AuthScreenProps) {
         <p className="text-kumo-subtle mb-5 text-sm">
           {mode === "setup"
             ? "This server has no accounts yet. Create the admin account to unlock file management (modify, delete, move)."
-            : "Sign in to unlock file management in your scope."}
+            : me.data?.access_policy === "private"
+              ? "Sign in to access this filebrowser."
+              : "Sign in to unlock file management in your scope."}
         </p>
         <div className="flex flex-col gap-3">
           {mode === "login" && (
@@ -100,7 +106,7 @@ export function AuthScreen({ mode }: AuthScreenProps) {
           {tooShort && <p className="text-kumo-danger text-sm">Password must be at least 8 characters.</p>}
           {submit.error instanceof Error && <p className="text-kumo-danger text-sm">{submit.error.message}</p>}
           <div className="mt-1 flex gap-2">
-            {mode === "login" && (
+            {canGoBack && (
               <Button
                 type="button"
                 variant="secondary"

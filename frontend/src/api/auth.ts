@@ -1,11 +1,14 @@
 import { withBasePath } from "../lib/base";
 
+export type AccessPolicy = "public" | "readonly" | "private";
+
 export interface Me {
   admin: boolean;
   insecure: boolean;
   initialized: boolean;
   username?: string;
   scope?: string;
+  access_policy?: AccessPolicy;
 }
 
 export interface User {
@@ -90,6 +93,24 @@ export const auth = {
     const res = await fetch(withBasePath(`/api/private?path=${encodeURIComponent(path)}`), {
       method: "DELETE",
       headers: { Origin: window.location.origin },
+    });
+    if (!res.ok) throw new Error(await jsonError(res));
+  },
+
+  getAccessPolicy: async (): Promise<AccessPolicy> => {
+    const res = await fetch(withBasePath("/api/settings/policy"), {
+      headers: { Origin: window.location.origin },
+    });
+    if (!res.ok) throw new Error(await jsonError(res));
+    const data = (await res.json()) as { access_policy: AccessPolicy };
+    return data.access_policy;
+  },
+
+  setAccessPolicy: async (policy: AccessPolicy): Promise<void> => {
+    const res = await fetch(withBasePath("/api/settings/policy"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Origin: window.location.origin },
+      body: JSON.stringify({ access_policy: policy }),
     });
     if (!res.ok) throw new Error(await jsonError(res));
   },

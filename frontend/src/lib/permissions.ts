@@ -33,6 +33,8 @@ export function canWritePath(me: Me | undefined, path: string): boolean {
 export function canWriteIn(me: Me | undefined, dir: string): boolean {
   if (!me) return false;
   if (me.insecure || me.admin) return true;
-  if (!me.username) return false;
+  if (!me.username) {
+    return (me.access_policy ?? "public") === "public";
+  }
   return inScope(me.scope, dir);
 }

@@ -1,6 +1,7 @@
 import { mutate } from "./capability";
 import { withBasePath } from "../lib/base";
 import { currentRoute, navigate } from "../lib/router";
+import { getEditToken } from "../lib/tokens";
 import type { FileMeta, FileInfo, Health, Listing, Usage } from "../types";
 
 function adminInit(init: RequestInit = {}): RequestInit {
@@ -80,7 +81,7 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path }),
-    }).then((r) => json<FileInfo>(r)),
+    }).then((r) => json<FileInfo & { edit_token?: string }>(r)),
 
   rawUrl: (path: string, inline = false) =>
     withBasePath(`/api/raw?path=${encodeURIComponent(path)}${inline ? "&inline=true" : ""}`),
@@ -118,11 +119,16 @@ export const api = {
     return res.json() as Promise<FileInfo>;
   },
 
-  /** Overwrite or create a file with the given content. Admin-only. */
-  save: async (path: string, content: string): Promise<FileInfo> => {
-    const res = await fetch(withBasePath(`/api/raw?path=${encodeURIComponent(path)}`), adminInit({
+  /** Overwrite or create a file with the given content. Admin or valid edit token. */
+  save: async (path: string, content: string, editToken?: string): Promise<FileInfo> => {
+    const token = editToken ?? getEditToken(path);
+    const headers = new Headers({ "Content-Type": "text/plain; charset=utf-8" });
+    if (token) {
+      headers.set("X-Edit-Token", token);
+    }
+    const res = await mutate(withBasePath(`/api/raw?path=${encodeURIComponent(path)}`), adminInit({
       method: "PUT",
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
+      headers,
       body: content,
     }));
     if (!res.ok) await adminError(res);

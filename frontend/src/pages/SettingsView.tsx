@@ -15,11 +15,11 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import { useState, type SubmitEvent } from "react";
-import { users, auth, type User } from "../api/auth";
+import { users, auth, type User, type AccessPolicy } from "../api/auth";
 import { useMe } from "../lib/useMe";
 import { navigate } from "../lib/router";
 
-export type SettingsTab = "profile" | "users";
+export type SettingsTab = "profile" | "users" | "policy";
 
 interface SettingsViewProps {
   tab: SettingsTab;
@@ -32,9 +32,10 @@ export function SettingsView({ tab, onTabChange, onClose, onOpenMobileMenu }: Se
   const me = useMe();
   const admin = me.data?.admin === true;
 
-  const tabs: { id: SettingsTab; label: string; adminOnly?: boolean }[] = [
-    { id: "profile", label: "Profile" },
-    { id: "users", label: "Users", adminOnly: true },
+  const tabs: { id: SettingsTab; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
+    { id: "profile", label: "Profile", icon: <KeyIcon size={16} /> },
+    { id: "users", label: "Users", icon: <ShieldCheckIcon size={16} />, adminOnly: true },
+    { id: "policy", label: "Access Policy", icon: <LockKeyIcon size={16} />, adminOnly: true },
   ];
 
   return (
@@ -71,13 +72,19 @@ export function SettingsView({ tab, onTabChange, onClose, onOpenMobileMenu }: Se
                   : "text-kumo-subtle hover:text-kumo-default border-transparent"
                   }`}
               >
-                {t.id === "profile" ? <KeyIcon size={16} /> : <ShieldCheckIcon size={16} />}
+                {t.icon}
                 {t.label}
               </button>
             ))}
         </div>
 
-        {tab === "profile" ? <ProfilePanel /> : <UsersPanel />}
+        {tab === "profile" ? (
+          <ProfilePanel />
+        ) : tab === "users" ? (
+          <UsersPanel />
+        ) : (
+          <PolicyPanel />
+        )}
       </div>
     </main>
   );
@@ -467,5 +474,122 @@ function UserForm({ user, onClose, onSaved }: UserFormProps) {
         </Button>
       </div>
     </form>
+  );
+}
+
+function PolicyPanel() {
+  const queryClient = useQueryClient();
+  const me = useMe();
+  const currentPolicy: AccessPolicy = me.data?.access_policy ?? "public";
+  const [override, setOverride] = useState<AccessPolicy | null>(null);
+
+  const selected = override ?? currentPolicy;
+
+  const save = useMutation({
+    mutationFn: () => auth.setAccessPolicy(selected),
+    onSuccess: () => {
+      void queryClient.invalidateQueries();
+      setOverride(null);
+    },
+  });
+
+  const options: {
+    id: AccessPolicy;
+    title: string;
+    description: string;
+    badge?: string;
+  }[] = [
+      {
+        id: "public",
+        title: "Public",
+        description:
+          "Anonymous visitors can browse, download, upload files, and create folders.",
+        badge: "Default",
+      },
+      {
+        id: "readonly",
+        title: "Read-only",
+        description:
+          "Anonymous visitors can only browse and download files.",
+      },
+      {
+        id: "private",
+        title: "Private",
+        description:
+          "Visitors must sign in to view or modify files.",
+      },
+    ];
+
+  const changed = selected !== currentPolicy;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="bg-kumo-base ring-kumo-hairline flex flex-col gap-1 rounded-xl p-5 ring-1">
+        <h2 className="text-base font-semibold">Access Policy</h2>
+        <p className="text-kumo-subtle text-sm">
+          Decide how people without an account can use filebrowser.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        {options.map((opt) => {
+          const isSelected = selected === opt.id;
+          const isActive = opt.id === currentPolicy;
+          return (
+            <div
+              key={opt.id}
+              onClick={() => setOverride(opt.id)}
+              className={`bg-kumo-base ring-kumo-hairline flex min-h-22 cursor-pointer items-start gap-4 rounded-xl p-5 ring-1 transition-colors ${isSelected
+                ? "ring-kumo-brand ring-2 bg-kumo-brand-tint/10"
+                : "hover:bg-kumo-tint/20"
+                }`}
+            >
+              <input
+                type="radio"
+                name="access_policy"
+                checked={isSelected}
+                onChange={() => setOverride(opt.id)}
+                className="mt-1 cursor-pointer accent-kumo-brand"
+              />
+              <div className="flex flex-1 flex-col gap-1">
+                <div className="flex min-h-6 items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">{opt.title}</span>
+                    {opt.badge && (
+                      <Badge variant="secondary">
+                        {opt.badge}
+                      </Badge>
+                    )}
+                  </div>
+                  {isActive && (
+                    <Badge variant="primary" className="shrink-0">
+                      Active
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-kumo-subtle text-sm leading-relaxed">
+                  {opt.description}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {save.error instanceof Error && (
+        <p className="text-kumo-danger text-sm">{save.error.message}</p>
+      )}
+
+      <div className="flex justify-end pt-2">
+        <Button
+          variant="primary"
+          loading={save.isPending}
+          disabled={!changed}
+          onClick={() => save.mutate()}
+        >
+          Save Changes
+        </Button>
+      </div>
+    </div>
   );
 }

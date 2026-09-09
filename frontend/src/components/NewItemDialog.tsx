@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api } from "../api/client";
 import { isReservedPath } from "../lib/routes";
 import { joinPath } from "../lib/path";
+import { setEditToken } from "../lib/tokens";
 
 export type NewItemKind = "dir" | "file" | null;
 
@@ -11,7 +12,7 @@ interface NewItemDialogProps {
   kind: NewItemKind;
   dir: string;
   onClose: () => void;
-  onCreate: (path: string) => void;
+  onCreate: (path: string, kind: "dir" | "file") => void;
 }
 
 export function NewItemDialog({ kind, dir, onClose, onCreate }: NewItemDialogProps) {
@@ -29,16 +30,19 @@ export function NewItemDialog({ kind, dir, onClose, onCreate }: NewItemDialogPro
       if (kind === "dir") {
         await api.createDir(path);
       } else if (kind === "file") {
-        await api.createFile(path);
+        const res = await api.createFile(path);
+        if (res.edit_token) {
+          setEditToken(path, res.edit_token);
+        }
       }
       return path;
     },
     onSuccess: (path) => {
+      const createdKind = kind ?? "file";
       void queryClient.invalidateQueries({ queryKey: ["list"] });
       void queryClient.invalidateQueries({ queryKey: ["usage"] });
-      onCreate(path);
       setName("");
-      onClose();
+      onCreate(path, createdKind);
     },
   });
 

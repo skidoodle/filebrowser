@@ -45,6 +45,7 @@ describe("routePath", () => {
       { page: "viewer", path: "docs/guide.pdf", dir: "inbox" },
       { page: "create", kind: "file", dir: "docs" },
       { page: "settings", tab: "profile", dir: "docs" },
+      { page: "settings", tab: "policy", dir: "docs" },
       { page: "auth", mode: "login", dir: "docs" },
     ];
 

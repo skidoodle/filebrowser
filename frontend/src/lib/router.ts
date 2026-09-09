@@ -23,14 +23,24 @@ function storedDirectory(state: unknown): string | undefined {
   return routeState.dir;
 }
 
+function storedEdit(state: unknown): boolean | undefined {
+  if (!isRecord(state)) return undefined;
+  const routeState = state[HISTORY_STATE_KEY];
+  return isRecord(routeState) && routeState.edit === true ? true : undefined;
+}
+
 function historyState(route: AppRoute): Record<string, unknown> {
   const current = isRecord(window.history.state) ? window.history.state : {};
-  return { ...current, [HISTORY_STATE_KEY]: { dir: route.dir } };
+  const stored: Record<string, unknown> = { dir: route.dir };
+  if (route.page === "viewer" && route.edit) {
+    stored.edit = true;
+  }
+  return { ...current, [HISTORY_STATE_KEY]: stored };
 }
 
 function readRoute(): AppRoute {
   const pathname = withoutBasePath(window.location.pathname) ?? "/";
-  return parseRoute(pathname, storedDirectory(window.history.state));
+  return parseRoute(pathname, storedDirectory(window.history.state), storedEdit(window.history.state));
 }
 
 let snapshot = readRoute();
