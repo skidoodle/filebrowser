@@ -7,6 +7,7 @@ import {
   DownloadSimpleIcon,
   InfoIcon,
   ListBulletsIcon,
+  ListIcon,
   MagnifyingGlassIcon,
   MoonIcon,
   SquareIcon,
@@ -45,6 +46,7 @@ function ThemeIcon({ theme, size }: { theme: Theme; size: number }) {
 
 interface TopBarProps {
   onSearch: () => void;
+  onOpenMobileMenu?: () => void;
   onUploadFiles?: (files: File[]) => void;
   onDownload: () => void;
   canDownload: boolean;
@@ -54,6 +56,7 @@ interface TopBarProps {
 
 export function TopBar({
   onSearch,
+  onOpenMobileMenu,
   onUploadFiles,
   onDownload,
   canDownload,
@@ -65,6 +68,17 @@ export function TopBar({
 
   return (
     <div className="border-kumo-hairline bg-kumo-canvas/90 sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-3 md:px-4">
+      {onOpenMobileMenu && (
+        <Button
+          type="button"
+          variant="ghost"
+          shape="square"
+          aria-label="Open menu"
+          icon={<ListIcon size={20} />}
+          onClick={onOpenMobileMenu}
+          className="md:hidden"
+        />
+      )}
       <button
         type="button"
         onClick={onSearch}

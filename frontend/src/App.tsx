@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { auth } from "./api/auth";
 import { AuthScreen } from "./components/AuthScreen";
 import { NewItemDialog } from "./components/NewItemDialog";
@@ -31,6 +31,9 @@ export default function App() {
   const dir = route.dir;
   const newKind = route.page === "create" ? route.kind : null;
   const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
+  const openMobileMenu = useCallback(() => setMobileMenuOpen(true), []);
   const loginMode = route.page === "auth" ? route.mode : null;
   const settingsTab = route.page === "settings" ? route.tab : null;
 
@@ -80,16 +83,25 @@ export default function App() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      <Sidebar currentDir={dir} onNavigate={navigateToDirectory} />
+      <Sidebar
+        currentDir={dir}
+        onNavigate={navigateToDirectory}
+        mobileOpen={mobileMenuOpen}
+        onMobileClose={closeMobileMenu}
+      />
 
       {effectiveTab !== null && signedIn ? (
         <SettingsView
           tab={effectiveTab}
           onTabChange={(tab) => navigate({ page: "settings", tab, dir }, { replace: true })}
           onClose={() => navigate({ page: "files", dir }, { replace: true })}
+          onOpenMobileMenu={openMobileMenu}
         />
       ) : (
-        <Browser onSearch={() => setSearchOpen(true)} />
+        <Browser
+          onSearch={() => setSearchOpen(true)}
+          onOpenMobileMenu={openMobileMenu}
+        />
       )}
 
       <UploadPanel />

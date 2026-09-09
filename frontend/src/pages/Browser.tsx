@@ -33,7 +33,12 @@ import { useSelection } from "../stores/selection";
 import { useUploads } from "../stores/uploads";
 import type { FileInfo } from "../types";
 
-export function Browser({ onSearch }: { onSearch: () => void }) {
+interface BrowserProps {
+  onSearch: () => void;
+  onOpenMobileMenu?: () => void;
+}
+
+export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
   const route = useRoute();
   const dir = route.dir;
   const prefs = usePrefs();
@@ -239,6 +244,7 @@ export function Browser({ onSearch }: { onSearch: () => void }) {
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
       <TopBar
+        onOpenMobileMenu={onOpenMobileMenu}
         onSearch={onSearch}
         onUploadFiles={canWriteHere ? (files) => enqueue(dir, files) : undefined}
         onDownload={downloadSelection}

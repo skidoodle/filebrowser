@@ -60,7 +60,7 @@ export function NewItemDialog({ kind, dir, onClose, onCreate }: NewItemDialogPro
         }
       }}
     >
-      <Dialog className="p-6">
+      <Dialog className="p-6 top-20 sm:top-24 z-50">
         <Dialog.Title>{title}</Dialog.Title>
         <Dialog.Description>Name entries exactly as they should appear, including extensions for files.</Dialog.Description>
 

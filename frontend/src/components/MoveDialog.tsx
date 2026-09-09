@@ -38,7 +38,7 @@ export function MoveDialog({ from, onClose }: MoveDialogProps) {
         if (!open) onClose();
       }}
     >
-      <Dialog className="p-6">
+      <Dialog className="p-6 top-20 sm:top-24 z-50">
         <Dialog.Title>Move or rename</Dialog.Title>
         <Dialog.Description>
           Enter the destination path for <span className="font-semibold">{name}</span>. Same folder renames it; a

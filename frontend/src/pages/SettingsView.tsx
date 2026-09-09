@@ -4,10 +4,12 @@ import {
   ArrowLeftIcon,
   CheckIcon,
   KeyIcon,
+  ListIcon,
   LockKeyIcon,
   PencilSimpleIcon,
   PlusIcon,
   ShieldCheckIcon,
+  SignOutIcon,
   TrashSimpleIcon,
   UserCircleIcon,
   XIcon,
@@ -15,6 +17,7 @@ import {
 import { useState, type SubmitEvent } from "react";
 import { users, auth, type User } from "../api/auth";
 import { useMe } from "../lib/useMe";
+import { navigate } from "../lib/router";
 
 export type SettingsTab = "profile" | "users";
 
@@ -22,9 +25,10 @@ interface SettingsViewProps {
   tab: SettingsTab;
   onTabChange: (tab: SettingsTab) => void;
   onClose: () => void;
+  onOpenMobileMenu?: () => void;
 }
 
-export function SettingsView({ tab, onTabChange, onClose }: SettingsViewProps) {
+export function SettingsView({ tab, onTabChange, onClose, onOpenMobileMenu }: SettingsViewProps) {
   const me = useMe();
   const admin = me.data?.admin === true;
 
@@ -36,9 +40,22 @@ export function SettingsView({ tab, onTabChange, onClose }: SettingsViewProps) {
   return (
     <main className="bg-kumo-canvas text-kumo-default min-w-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-3xl p-4 md:p-8">
-        <div className="mb-6 flex items-center gap-3">
-          <Button variant="ghost" shape="square" aria-label="Back to files" icon={<ArrowLeftIcon size={20} />} onClick={onClose} />
-          <h1 className="text-xl font-semibold">Settings</h1>
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" shape="square" aria-label="Back to files" icon={<ArrowLeftIcon size={20} />} onClick={onClose} />
+            <h1 className="text-xl font-semibold">Settings</h1>
+          </div>
+          {onOpenMobileMenu && (
+            <Button
+              type="button"
+              variant="ghost"
+              shape="square"
+              aria-label="Open menu"
+              icon={<ListIcon size={20} />}
+              onClick={onOpenMobileMenu}
+              className="md:hidden"
+            />
+          )}
         </div>
 
         <div className="border-kumo-hairline mb-6 flex gap-1 border-b">
@@ -114,14 +131,32 @@ function ProfilePanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="bg-kumo-base ring-kumo-hairline flex items-center gap-4 rounded-xl p-5 ring-1">
-        <span className="bg-kumo-brand-tint text-kumo-brand flex h-12 w-12 items-center justify-center rounded-full">
-          <UserCircleIcon size={28} weight="fill" />
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-base font-semibold">{me.data?.username ?? "—"}</p>
-          <p className="text-kumo-subtle text-sm">{role}</p>
+      <div className="bg-kumo-base ring-kumo-hairline flex items-center justify-between gap-4 rounded-xl p-5 ring-1">
+        <div className="flex min-w-0 items-center gap-4">
+          <span className="bg-kumo-brand-tint text-kumo-brand flex h-12 w-12 shrink-0 items-center justify-center rounded-full">
+            <UserCircleIcon size={28} weight="fill" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-base font-semibold">{me.data?.username ?? "—"}</p>
+            <p className="text-kumo-subtle text-sm">{role}</p>
+          </div>
         </div>
+        {!me.data?.insecure && (
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<SignOutIcon size={18} />}
+            onClick={() => {
+              void auth.logout().then(() => {
+                void queryClient.invalidateQueries();
+                navigate({ page: "files", dir: "." }, { replace: true });
+              });
+            }}
+            className="shrink-0"
+          >
+            Sign out
+          </Button>
+        )}
       </div>
 
       <form
@@ -299,7 +334,7 @@ function UsersPanel() {
             if (!o) setDeleting(null);
           }}
         >
-          <Dialog className="p-6">
+          <Dialog className="p-6 top-20 sm:top-24 z-50">
             <Dialog.Title>Delete user</Dialog.Title>
             <Dialog.Description>
               {`Delete account "${deleting.username}"? Their private folders become public again.`}
