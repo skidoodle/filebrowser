@@ -18,6 +18,9 @@ services:
       - FILEBROWSER_ADDRESS=0.0.0.0:8080
       # Optional URL subpath, e.g. /files (default: empty for root)
       - FILEBROWSER_BASEURL=
+      # Who may write: public = anonymous browse + upload, readonly = browse
+      # only, private = sign-in required for everything (default: public)
+      - FILEBROWSER_ACCESS_POLICY=public
       # Maximum size for a single upload (default: 10GiB)
       - FILEBROWSER_MAXUPLOAD=10GiB
       # Directory for disposable thumbnails, previews, and signing key (default: /cache)

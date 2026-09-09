@@ -35,6 +35,7 @@ All settings come from environment variables.
 | `FILEBROWSER_DATABASE` | `./filebrowser.db` | path to SQLite database |
 | `FILEBROWSER_ADDRESS` | `0.0.0.0:8080` | listen address |
 | `FILEBROWSER_BASEURL` | empty | subpath the app is mounted under |
+| `FILEBROWSER_ACCESS_POLICY` | `public` | `public` lets anonymous visitors upload, `readonly` limits them to browsing, `private` requires sign-in for everything |
 | `FILEBROWSER_MAXUPLOAD` | `10GiB` | maximum size of a single upload |
 | `FILEBROWSER_CACHEDIR` | system temp | directory for thumbnails and other disposable data |
 | `FILEBROWSER_MAXTEXTSIZE` | `10MiB` | cutoff for text type detection |
