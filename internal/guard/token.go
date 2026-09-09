@@ -45,11 +45,8 @@ func ResolveKey(secret, cacheDir string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(cacheDir, 0o750); err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(path, []byte(hex.EncodeToString(key)), 0o600); err != nil {
-		return nil, err
+	if err := os.MkdirAll(cacheDir, 0o750); err == nil {
+		_ = os.WriteFile(path, []byte(hex.EncodeToString(key)), 0o600)
 	}
 	return key, nil
 }
