@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,8 +56,15 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("store: open: %w", err)
 	}
+	// WAL improves write concurrency but needs a filesystem that supports
+	// shared-memory mapping; bind mounts on NFS/CIFS and some container
+	// storage drivers cannot provide it and fail with "disk I/O error".
+	// It is an optimization, so degrade to the default rollback journal
+	// instead of refusing to start.
+	if _, err := db.ExecContext(context.Background(), "PRAGMA journal_mode=WAL"); err != nil {
+		slog.Warn("store: WAL journal unavailable, using the default journal mode", "err", err)
+	}
 	for _, pragma := range []string{
-		"PRAGMA journal_mode=WAL",
 		"PRAGMA busy_timeout=5000",
 		"PRAGMA foreign_keys=ON",
 	} {
