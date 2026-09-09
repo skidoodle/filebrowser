@@ -24,7 +24,7 @@ frontend:
 
 # dev: run the Go dev server (live reload via air) and the Vite dev server together in the same terminal
 dev:
-    bun x concurrently -k -n "air,vite" -c "magenta,cyan" "air" "bun run --cwd frontend dev"
+    bun x concurrently -k -n "air,vite" -c "magenta,cyan" "air" "bun run --cwd frontend dev -- --host"
 
 # dev-backend: run the API in dev mode with live reload via air
 dev-backend:
@@ -32,7 +32,7 @@ dev-backend:
 
 # dev-frontend: run the Vite dev server (proxies /api to 127.0.0.1:8080)
 dev-frontend:
-    bun run --cwd frontend dev
+    bun run --cwd frontend dev -- --host
 
 # test: run all tests with the race detector
 test:
