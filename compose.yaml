@@ -8,9 +8,12 @@ services:
     volumes:
       - ./data:/data
       - ./cache:/cache
+      - ./db:/db
     environment:
       # Directory served inside the container (default: /data)
       - FILEBROWSER_ROOT=/data
+      # Path to SQLite database file inside container (default: /db/filebrowser.db)
+      - FILEBROWSER_DATABASE=/db/filebrowser.db
       # Listen address inside container (default: 0.0.0.0:8080)
       - FILEBROWSER_ADDRESS=0.0.0.0:8080
       # Optional URL subpath, e.g. /files (default: empty for root)

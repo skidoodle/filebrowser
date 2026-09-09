@@ -47,7 +47,7 @@ func newAuthManager(cfg *config.Config, st *store.Store, log *slog.Logger) (*aut
 	if seed != "" {
 		log.Info("seeding admin password from FILEBROWSER_ADMIN_PASSWORD")
 	}
-	dir := filepath.Join(cfg.Root, ".filebrowser")
+	dir := filepath.Dir(cfg.Database)
 	mgr, err := auth.New(dir, cfg.Secret, seed, st, log)
 	if err != nil {
 		return nil, err
@@ -79,9 +79,8 @@ func run() error {
 		return err
 	}
 
-	// Account + private-folder persistence lives in SQLite inside the
-	// reserved namespace.
-	st, err := store.Open(filepath.Join(cfg.Root, ".filebrowser", "users.db"))
+	// Account + private-folder persistence lives in SQLite.
+	st, err := store.Open(cfg.Database)
 	if err != nil {
 		return err
 	}

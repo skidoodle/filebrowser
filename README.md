@@ -19,7 +19,7 @@ FILEBROWSER_ROOT=./data ./bin/filebrowser
 Or run the Docker image:
 
 ```bash
-docker run -p 8080:8080 -v "$PWD/data:/data" ghcr.io/skidoodle/filebrowser:latest
+docker run -p 8080:8080 -v "$PWD/data:/data" -v "$PWD/db:/db" ghcr.io/skidoodle/filebrowser:latest
 ```
 
 Then open http://localhost:8080. The first visit offers to create an admin
@@ -32,6 +32,7 @@ All settings come from environment variables.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `FILEBROWSER_ROOT` | `./data` | directory served to visitors |
+| `FILEBROWSER_DATABASE` | `./filebrowser.db` | path to SQLite database |
 | `FILEBROWSER_ADDRESS` | `0.0.0.0:8080` | listen address |
 | `FILEBROWSER_BASEURL` | empty | subpath the app is mounted under |
 | `FILEBROWSER_MAXUPLOAD` | `10GiB` | maximum size of a single upload |

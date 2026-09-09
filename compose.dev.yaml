@@ -12,5 +12,6 @@ services:
     volumes:
       - ./data:/data
       - ./cache:/cache
+      - ./db:/db
     env_file:
       - .env

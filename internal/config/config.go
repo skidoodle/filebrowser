@@ -16,6 +16,8 @@ const prefix = "FILEBROWSER_"
 type Config struct {
 	// Root is the filesystem directory served to guests.
 	Root string
+	// Database is the path to the SQLite database file.
+	Database string
 	// Address is the listen address, e.g. "127.0.0.1:8080".
 	Address string
 	// BaseURL is an optional subpath the app is served under, e.g. "/files".
@@ -55,6 +57,7 @@ type Config struct {
 func FromEnv() (*Config, error) {
 	cfg := &Config{
 		Root:          getenv("ROOT", "./data"),
+		Database:      getenv("DATABASE", "./filebrowser.db"),
 		Address:       getenv("ADDRESS", "0.0.0.0:8080"),
 		BaseURL:       getenv("BASEURL", ""),
 		MaxUpload:     10 << 30,

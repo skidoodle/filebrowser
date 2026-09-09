@@ -62,14 +62,17 @@ func newTestServerCfg(t *testing.T, tc testServerConfig) (*httptest.Server, stor
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.Open(filepath.Join(cfg.Root, ".filebrowser", "users.db"))
+	if cfg.Database == "" {
+		cfg.Database = filepath.Join(t.TempDir(), "filebrowser.db")
+	}
+	st, err := store.Open(cfg.Database)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	var mgr *auth.Manager
 	if !cfg.Insecure {
-		mgr, err = auth.New(filepath.Join(cfg.Root, ".filebrowser"), cfg.Secret, tc.Seed, st, log)
+		mgr, err = auth.New(filepath.Dir(cfg.Database), cfg.Secret, tc.Seed, st, log)
 		if err != nil {
 			t.Fatal(err)
 		}
