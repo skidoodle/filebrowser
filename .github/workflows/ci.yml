@@ -4,44 +4,57 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.27"
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Frontend lint + build
-        run: |
-          bun install --frozen-lockfile --cwd frontend
-          bun run --cwd frontend lint
-          bun run --cwd frontend build
+      - uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('frontend/**/bun.lock*') }}
+          restore-keys: bun-${{ runner.os }}-
 
-      - name: Go vet + test
-        run: |
-          go vet ./...
-          go test -race ./...
+      - run: |
+          cd frontend
+          bun install --frozen-lockfile
+          bun run lint
+          bun run build
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 50
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          cache: true
+
+      - run: go vet ./...
+      - run: go test -race ./...
+
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: latest
 
-      - name: Production build (version-stamped)
-        run: |
-          VERSION=$(git describe --tags --always --dirty)
+      - run: |
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
           COMMIT=$(git rev-parse --short HEAD)
           go build -trimpath -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o bin/filebrowser .
