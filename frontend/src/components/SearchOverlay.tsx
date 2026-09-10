@@ -10,6 +10,7 @@ interface SearchOverlayProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (file: FileInfo) => void;
+  currentDir?: string;
 }
 
 interface ResultGroup {
@@ -17,32 +18,41 @@ interface ResultGroup {
   items: FileInfo[];
 }
 
-export function SearchOverlay({ open, onOpenChange, onSelect }: SearchOverlayProps) {
+export function SearchOverlay({ open, onOpenChange, onSelect, currentDir }: SearchOverlayProps) {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
+  const [scopedOverride, setScopedOverride] = useState<boolean | null>(null);
+
+  const hasDir = Boolean(currentDir && currentDir !== ".");
+  const scoped = scopedOverride !== null ? scopedOverride : hasDir;
+  const activePath = scoped && hasDir ? currentDir : undefined;
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(query), 250);
+    const t = setTimeout(() => setDebounced(query), 150);
     return () => clearTimeout(t);
   }, [query]);
 
   const search = useQuery({
-    queryKey: ["search", debounced],
-    queryFn: () => api.search(debounced, 50),
+    queryKey: ["search", debounced, activePath],
+    queryFn: () => api.search(debounced, 50, activePath),
     enabled: open && debounced.trim().length > 0,
     placeholderData: (prev) => prev,
   });
 
   const results = search.data ?? [];
+  const groupLabel = activePath ? `Results in /${activePath}` : "Results";
   const groups: ResultGroup[] =
-    results.length > 0 ? [{ label: "Results", items: results }] : [];
+    results.length > 0 ? [{ label: groupLabel, items: results }] : [];
 
   return (
     <CommandPalette.Root
       open={open}
       onOpenChange={(o) => {
         onOpenChange(o);
-        if (!o) setQuery("");
+        if (!o) {
+          setQuery("");
+          setScopedOverride(null);
+        }
       }}
       items={groups}
       value={query}
@@ -55,7 +65,10 @@ export function SearchOverlay({ open, onOpenChange, onSelect }: SearchOverlayPro
         setQuery("");
       }}
     >
-      <CommandPalette.Input autoFocus placeholder="Search files and folders…" />
+      <CommandPalette.Input
+        autoFocus
+        placeholder={activePath ? `Search in /${activePath}…` : "Search files and folders…"}
+      />
       <CommandPalette.List>
         <CommandPalette.Results>
           {(group) => (
@@ -86,6 +99,17 @@ export function SearchOverlay({ open, onOpenChange, onSelect }: SearchOverlayPro
         )}
       </CommandPalette.List>
       <CommandPalette.Footer>
+        {currentDir && currentDir !== "." && (
+          <button
+            type="button"
+            onClick={() => setScopedOverride((s) => (s !== null ? !s : !hasDir))}
+            className="text-kumo-info hover:underline cursor-pointer mr-auto text-xs font-medium"
+          >
+            {scoped
+              ? `Scope: /${currentDir} (click for all)`
+              : "Scope: All files (click for folder)"}
+          </button>
+        )}
         <span>↑↓ navigate</span>
         <span>↵ open</span>
         <span>esc close</span>

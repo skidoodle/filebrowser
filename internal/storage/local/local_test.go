@@ -3,6 +3,7 @@ package local
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,11 +11,11 @@ import (
 	"github.com/skidoodle/filebrowser/internal/storage"
 )
 
-func newTestStorage(t *testing.T) *Storage {
-	t.Helper()
-	s, err := New(t.TempDir())
+func newTestStorage(tb testing.TB) *Storage {
+	tb.Helper()
+	s, err := New(tb.TempDir())
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	return s
 }
@@ -207,5 +208,104 @@ func TestUsage(t *testing.T) {
 	}
 	if u.Used > u.Total {
 		t.Fatalf("used %d > total %d", u.Used, u.Total)
+	}
+}
+
+func walkPaths(t *testing.T, s *Storage, opts storage.SearchOptions, filesOnly bool) []string {
+	t.Helper()
+	var got []string
+	err := s.Walk(context.Background(), ".", opts, func(fi storage.FileInfo) error {
+		if !filesOnly || !fi.IsDir {
+			got = append(got, fi.Path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	return got
+}
+
+func TestWalkNoiseDirPruning(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	s := newTestStorage(t)
+
+	for _, p := range []string{
+		"myproject/index.js",
+		"myproject/node_modules/pkg/index.js",
+		"myproject/.git/objects/blob.txt",
+		"photos/family.jpg",
+		"photos/@eaDir/family.jpg/thumb.jpg",
+	} {
+		if _, err := s.CreateFile(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("prune node_modules", func(t *testing.T) {
+		t.Parallel()
+		got := walkPaths(t, s, storage.SearchOptions{Term: "index"}, false)
+		if len(got) != 1 || got[0] != "myproject/index.js" {
+			t.Fatalf("search 'index' should prune node_modules, got %v", got)
+		}
+	})
+
+	t.Run("prune eaDir", func(t *testing.T) {
+		t.Parallel()
+		got := walkPaths(t, s, storage.SearchOptions{Term: "family"}, false)
+		if len(got) != 1 || got[0] != "photos/family.jpg" {
+			t.Fatalf("search 'family' should prune @eaDir, got %v", got)
+		}
+	})
+
+	t.Run("explicit search not pruned", func(t *testing.T) {
+		t.Parallel()
+		got := walkPaths(t, s, storage.SearchOptions{Term: "node_modules"}, false)
+		if len(got) == 0 {
+			t.Fatal("explicit search for 'node_modules' should find entries")
+		}
+	})
+
+	t.Run("non-search walk includes all", func(t *testing.T) {
+		t.Parallel()
+		got := walkPaths(t, s, storage.SearchOptions{}, true)
+		if len(got) != 5 {
+			t.Fatalf("unfiltered walk should include all 5 files, got %d: %v", len(got), got)
+		}
+	})
+}
+
+func BenchmarkWalk(b *testing.B) {
+	ctx := context.Background()
+	s := newTestStorage(b)
+
+	for d := range 30 {
+		dir := fmt.Sprintf("dir_%02d", d)
+		for f := range 30 {
+			p := fmt.Sprintf("%s/file_%03d.txt", dir, f)
+			if _, err := s.CreateFile(ctx, p); err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+	if _, err := s.CreateFile(ctx, "dir_15/needle_target.txt"); err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for range b.N {
+		count := 0
+		err := s.Walk(ctx, ".", storage.SearchOptions{Term: "needle"}, func(fi storage.FileInfo) error {
+			count++
+			return nil
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+		if count != 1 {
+			b.Fatalf("want 1 match, got %d", count)
+		}
 	}
 }

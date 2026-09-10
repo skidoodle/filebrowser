@@ -118,6 +118,7 @@ export default function App() {
       <SearchOverlay
         open={searchOpen}
         onOpenChange={setSearchOpen}
+        currentDir={dir}
         onSelect={(file) =>
           file.isDir
             ? navigateToDirectory(file.path)

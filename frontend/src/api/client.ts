@@ -59,8 +59,12 @@ export const api = {
 
   usage: () => fetch(withBasePath("/api/usage")).then((r) => json<Usage>(r)),
 
-  search: async (q: string, limit = 50): Promise<FileInfo[]> => {
-    const res = await fetch(withBasePath(`/api/search?q=${encodeURIComponent(q)}&limit=${limit}`));
+  search: async (q: string, limit = 50, path?: string): Promise<FileInfo[]> => {
+    const params = new URLSearchParams({ q, limit: String(limit) });
+    if (path && path !== ".") {
+      params.set("path", path);
+    }
+    const res = await fetch(withBasePath(`/api/search?${params.toString()}`));
     if (!res.ok) throw new Error(await errorMessage(res));
     const text = await res.text();
     return text

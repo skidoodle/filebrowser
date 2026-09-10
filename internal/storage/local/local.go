@@ -8,7 +8,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/skidoodle/filebrowser/internal/fsutil"
 	"github.com/skidoodle/filebrowser/internal/storage"
@@ -309,61 +312,269 @@ func (s *Storage) Walk(ctx context.Context, p string, opts storage.SearchOptions
 	return s.walkDir(ctx, base, baseRel, term, opts, fn)
 }
 
-// walkDir visits every entry below the base directory. The caller's fn may
-// abort with storage.ErrDone, which is absorbed here.
-func (s *Storage) walkDir(ctx context.Context, base, baseRel, term string, opts storage.SearchOptions, fn func(storage.FileInfo) error) error {
-	st := &walkState{limit: opts.Limit}
-	visit := func(cur string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return st.visitError(err)
+var defaultNoiseDirs = map[string]struct{}{
+	".git":                      {},
+	".svn":                      {},
+	".hg":                       {},
+	"node_modules":              {},
+	"@eaDir":                    {}, // Synology NAS thumbnails
+	"#recycle":                  {}, // Synology NAS recycle bin
+	"@Recycle":                  {}, // QNAP NAS recycle bin
+	".@__thumb":                 {}, // QNAP NAS thumbnails
+	"$RECYCLE.BIN":              {}, // Windows recycle bin
+	"System Volume Information": {},
+	".Trash-1000":               {}, // Linux trash
+	".Trashes":                  {}, // macOS trash
+	".fseventsd":                {}, // macOS filesystem events
+	".Spotlight-V100":           {}, // macOS spotlight
+	".cache":                    {},
+	"__pycache__":               {},
+	".venv":                     {},
+}
+
+func shouldSkipDir(name, lowerTerm string, isSearch bool) bool {
+	if name == reservedDir {
+		return true
+	}
+	if !isSearch {
+		return false
+	}
+	if lowerTerm != "" {
+		lowerName := strings.ToLower(name)
+		if strings.Contains(lowerTerm, lowerName) || strings.Contains(lowerName, lowerTerm) {
+			return false
 		}
+	}
+	_, skip := defaultNoiseDirs[name]
+	return skip
+}
+
+type dirTask struct {
+	diskPath string
+	relPath  string
+}
+
+type walkContext struct {
+	opts         storage.SearchOptions
+	term         string
+	isSearch     bool
+	callFn       func(storage.FileInfo) error
+	recordErr    func(error)
+	limitReached *atomic.Bool
+}
+
+func (s *Storage) matchDir(opts storage.SearchOptions, lowerTerm, fullRel, name string) bool {
+	if opts.Type != "" && opts.Type != storage.TypeDir {
+		return false
+	}
+	if opts.Extension != "" {
+		return false
+	}
+	return matchTerm(lowerTerm, fullRel, name)
+}
+
+func (s *Storage) matchFile(opts storage.SearchOptions, lowerTerm, fullRel, name string) bool {
+	if opts.Type == storage.TypeDir {
+		return false
+	}
+	if opts.Extension != "" {
+		ext := strings.TrimPrefix(strings.ToLower(path.Ext(name)), ".")
+		if ext != opts.Extension {
+			return false
+		}
+	}
+	if opts.Type != "" {
+		detectedType, _ := fsutil.Detect(name, nil)
+		if detectedType != opts.Type {
+			return false
+		}
+	}
+	return matchTerm(lowerTerm, fullRel, name)
+}
+
+func matchTerm(lowerTerm, fullRel, name string) bool {
+	if lowerTerm == "" {
+		return true
+	}
+	if strings.Contains(strings.ToLower(name), lowerTerm) {
+		return true
+	}
+	return strings.Contains(strings.ToLower(fullRel), lowerTerm)
+}
+
+func (s *Storage) processDir(wc *walkContext, task dirTask, d fs.DirEntry, childRel string, nextQueue *[]dirTask) bool {
+	name := d.Name()
+	if shouldSkipDir(name, wc.term, wc.isSearch) {
+		return true
+	}
+
+	if s.matchDir(wc.opts, wc.term, childRel, name) {
+		fi, err := d.Info()
+		if err == nil {
+			item := s.info(childRel, fi, nil)
+			if err := wc.callFn(item); err != nil {
+				wc.recordErr(err)
+				wc.limitReached.Store(true)
+				return false
+			}
+		}
+	}
+
+	*nextQueue = append(*nextQueue, dirTask{
+		diskPath: filepath.Join(task.diskPath, name),
+		relPath:  childRel,
+	})
+	return true
+}
+
+func (s *Storage) processFile(wc *walkContext, d fs.DirEntry, childRel string) bool {
+	name := d.Name()
+	if !s.matchFile(wc.opts, wc.term, childRel, name) {
+		return true
+	}
+
+	fi, err := d.Info()
+	if err != nil {
+		return true
+	}
+
+	item := s.info(childRel, fi, nil)
+	if err := wc.callFn(item); err != nil {
+		wc.recordErr(err)
+		wc.limitReached.Store(true)
+		return false
+	}
+	return true
+}
+
+func (s *Storage) scanTask(ctx context.Context, wc *walkContext, task dirTask, nextQueue *[]dirTask) {
+	entries, err := os.ReadDir(task.diskPath)
+	if err != nil {
+		return
+	}
+
+	for _, d := range entries {
+		if wc.limitReached.Load() || ctx.Err() != nil {
+			return
+		}
+
+		childRel := d.Name()
+		if task.relPath != "." && task.relPath != "" {
+			childRel = task.relPath + "/" + d.Name()
+		}
+
+		if d.IsDir() {
+			if !s.processDir(wc, task, d, childRel, nextQueue) {
+				return
+			}
+		} else {
+			if !s.processFile(wc, d, childRel) {
+				return
+			}
+		}
+	}
+}
+
+func (s *Storage) walkLevel(ctx context.Context, wc *walkContext, current []dirTask, numWorkers int) []dirTask {
+	workerNext := make([][]dirTask, numWorkers)
+	var taskIdx atomic.Int64
+	var wg sync.WaitGroup
+
+	actualWorkers := min(numWorkers, len(current))
+	wg.Add(actualWorkers)
+
+	for w := range actualWorkers {
+		workerID := w
+		go func() {
+			defer wg.Done()
+			for {
+				if wc.limitReached.Load() || ctx.Err() != nil {
+					return
+				}
+				i := int(taskIdx.Add(1) - 1)
+				if i >= len(current) {
+					return
+				}
+				s.scanTask(ctx, wc, current[i], &workerNext[workerID])
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	var next []dirTask
+	for _, sub := range workerNext {
+		next = append(next, sub...)
+	}
+	return next
+}
+
+func newWalkContext(opts storage.SearchOptions, term string, fn func(storage.FileInfo) error) (*walkContext, func() error) {
+	isSearch := opts.Term != "" || opts.Type != "" || opts.Extension != ""
+	limit := opts.Limit
+
+	var (
+		fnMu         sync.Mutex
+		limitReached atomic.Bool
+		firstErr     error
+		errOnce      sync.Once
+	)
+
+	wc := &walkContext{
+		opts:         opts,
+		term:         term,
+		isSearch:     isSearch,
+		limitReached: &limitReached,
+		recordErr: func(err error) {
+			if err != nil && !errors.Is(err, storage.ErrDone) && !errors.Is(err, context.Canceled) {
+				errOnce.Do(func() { firstErr = err })
+			}
+		},
+		callFn: func(item storage.FileInfo) error {
+			fnMu.Lock()
+			defer fnMu.Unlock()
+			if limitReached.Load() {
+				return storage.ErrDone
+			}
+			if err := fn(item); err != nil {
+				return err
+			}
+			if limit > 0 {
+				limit--
+				if limit == 0 {
+					limitReached.Store(true)
+					return storage.ErrDone
+				}
+			}
+			return nil
+		},
+	}
+	return wc, func() error { return firstErr }
+}
+
+// walkDir visits every entry below the base directory using parallel breadth-first search.
+// It filters entries using directory metadata before calling stat (d.Info()), prunes noise
+// directories during search, and streams matches level-by-level with bounded concurrency.
+func (s *Storage) walkDir(ctx context.Context, base, baseRel, term string, opts storage.SearchOptions, fn func(storage.FileInfo) error) error {
+	wc, getErr := newWalkContext(opts, term, fn)
+	currentQueue := []dirTask{{diskPath: base, relPath: baseRel}}
+	numWorkers := min(16, max(4, runtime.GOMAXPROCS(0)*2))
+
+	for len(currentQueue) > 0 {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		return s.visitEntry(st, base, baseRel, term, opts, fn, cur, d)
-	}
-	err := filepath.WalkDir(base, visit)
-	if errors.Is(err, storage.ErrDone) {
-		return nil
-	}
-	return err
-}
+		if wc.limitReached.Load() {
+			break
+		}
 
-// walkState counts matched entries for the limit check.
-type walkState struct {
-	matches int
-	limit   int
-}
+		currentQueue = s.walkLevel(ctx, wc, currentQueue, numWorkers)
+		if err := getErr(); err != nil {
+			return err
+		}
+	}
 
-// visitError maps vanished entries to a benign skip.
-func (st *walkState) visitError(err error) error {
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil // entry vanished mid-walk
-	}
-	return err
-}
-
-// visitEntry processes one walked entry: skip the reserved namespace,
-// build the FileInfo, apply filters, invoke the visitor fn.
-func (s *Storage) visitEntry(st *walkState, base, baseRel, term string, opts storage.SearchOptions, fn func(storage.FileInfo) error, cur string, d fs.DirEntry) error {
-	if d.IsDir() && d.Name() == reservedDir && base == s.evalRoot {
-		return fs.SkipDir // hidden server-state namespace
-	}
-	item, err := s.walkItem(base, baseRel, cur, d)
-	if err != nil {
-		return st.visitError(err)
-	}
-	if item == nil || !matches(opts, term, *item) {
-		return nil
-	}
-	if err := fn(*item); err != nil {
-		return err // caller may abort with storage.ErrDone
-	}
-	st.matches++
-	if st.limit > 0 && st.matches >= st.limit {
-		return fs.SkipAll
-	}
-	return nil
+	return getErr()
 }
 
 // walkFileRoot reports the single entry when the walk root is a file.
@@ -376,30 +587,6 @@ func (s *Storage) walkFileRoot(rel string, fi fs.FileInfo, opts storage.SearchOp
 		return err
 	}
 	return nil
-}
-
-// walkItem builds the FileInfo for one walked entry, or (nil, nil) for the
-// walk root itself.
-func (s *Storage) walkItem(base, baseRel, cur string, d fs.DirEntry) (*storage.FileInfo, error) {
-	relToBase, err := filepath.Rel(base, cur)
-	if err != nil {
-		return nil, err
-	}
-	if relToBase == "." {
-		return nil, nil
-	}
-	fullRel := baseRel
-	if fullRel == "." {
-		fullRel = filepath.ToSlash(relToBase)
-	} else {
-		fullRel = fullRel + "/" + filepath.ToSlash(relToBase)
-	}
-	fi, err := d.Info()
-	if err != nil {
-		return nil, err
-	}
-	item := s.info(fullRel, fi, nil)
-	return &item, nil
 }
 
 // matches applies the search filters to an entry.
