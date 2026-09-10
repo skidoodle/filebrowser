@@ -85,9 +85,11 @@ export default function App() {
     return <AuthScreen key={loginMode} mode={loginMode} />;
   }
 
-  // The user-management and policy tabs are admin-only; everyone else gets profile.
+  // Admin-only settings tabs fallback to profile for regular accounts.
   const effectiveTab =
-    (settingsTab === "users" || settingsTab === "policy") && me.data && !me.data.admin
+    (settingsTab === "users" || settingsTab === "policy" || settingsTab === "system" || settingsTab === "about") &&
+    me.data &&
+    !me.data.admin
       ? "profile"
       : settingsTab;
 

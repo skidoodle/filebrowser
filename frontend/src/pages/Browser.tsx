@@ -1,4 +1,4 @@
-import { Badge, Button, Dialog, Empty, Loader } from "@cloudflare/kumo";
+import { Badge, Empty, Loader } from "@cloudflare/kumo";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowSquareOutIcon,
@@ -19,10 +19,13 @@ import { api } from "../api/client";
 import { auth } from "../api/auth";
 import { canWriteIn, canWritePath } from "../lib/permissions";
 import { ContextMenu, type ContextMenuState, type MenuEntry } from "../components/ContextMenu";
+import { DeleteDialog } from "../components/DeleteDialog";
 import { DirBreadcrumbs } from "../components/DirBreadcrumbs";
 import { AdminDnd } from "../components/dnd";
+import { DropUploadOverlay } from "../components/DropUploadOverlay";
 import { FileCard } from "../components/FileCard";
 import { FileTable } from "../components/FileTable";
+import { GalleryGrid } from "../components/GalleryGrid";
 import { InfoPanel } from "../components/InfoPanel";
 import { MoveDialog } from "../components/MoveDialog";
 import { TopBar } from "../components/TopBar";
@@ -333,18 +336,16 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
             )}
 
             {items.length > 0 && prefs.viewMode === "gallery" && (
-              <GalleryGrid items={items.filter((f) => f.type === "image")} selected={selected} onSelect={selectEntry} onOpen={open} onMenu={itemContextMenu} />
+              <GalleryGrid
+                items={items.filter((f) => f.type === "image")}
+                selected={selected}
+                onSelect={selectEntry}
+                onOpen={open}
+                onMenu={itemContextMenu}
+              />
             )}
 
-            {dragOver && (
-              <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-kumo-canvas/80 backdrop-blur-sm animate-[fadeIn_150ms_ease-out]">
-                <div className="border-kumo-info flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed px-12 py-10">
-                  <UploadSimpleIcon size={40} weight="duotone" className="text-kumo-info" />
-                  <p className="text-kumo-default text-base font-semibold">Drop files to upload</p>
-                  <p className="text-kumo-subtle text-sm">Files will be uploaded to this folder</p>
-                </div>
-              </div>
-            )}
+            <DropUploadOverlay visible={dragOver} />
           </main>
         </AdminDnd>
 
@@ -357,33 +358,12 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
         <MoveDialog key={moveTarget} from={moveTarget} onClose={() => setMoveTarget(null)} />
       )}
 
-      <Dialog.Root
-        open={confirmDelete !== null}
-        onOpenChange={(open) => {
-          if (!open) setConfirmDelete(null);
-        }}
-      >
-        <Dialog className="p-6">
-          <Dialog.Title>Delete</Dialog.Title>
-          <Dialog.Description>
-            {confirmDelete !== null && confirmDelete.length > 1
-              ? `Permanently delete ${confirmDelete.length} items? This cannot be undone.`
-              : "Permanently delete this item? This cannot be undone."}
-          </Dialog.Description>
-          <div className="mt-4 flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setConfirmDelete(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              loading={del.isPending}
-              onClick={() => confirmDelete !== null && del.mutate(confirmDelete)}
-            >
-              Delete
-            </Button>
-          </div>
-        </Dialog>
-      </Dialog.Root>
+      <DeleteDialog
+        paths={confirmDelete}
+        loading={del.isPending}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={() => confirmDelete !== null && del.mutate(confirmDelete)}
+      />
 
       <input
         ref={folderInput}
@@ -398,55 +378,6 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
           e.target.value = "";
         }}
       />
-    </div>
-  );
-}
-
-interface GalleryGridProps {
-  items: FileInfo[];
-  selected: Set<string>;
-  onSelect: (file: FileInfo, additive: boolean) => void;
-  onOpen: (file: FileInfo) => void;
-  onMenu: (file: FileInfo, e: ReactMouseEvent<HTMLElement>) => void;
-}
-
-function GalleryGrid({ items, selected, onSelect, onOpen, onMenu }: GalleryGridProps) {
-  if (items.length === 0) {
-    return (
-      <Empty
-        title="No images in this folder"
-        description="Gallery view shows image files; try mosaic or list for everything else."
-      />
-    );
-  }
-  return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
-      {items.map((file) => (
-        <button
-          key={file.path}
-          type="button"
-          data-file-item
-          data-path={file.path}
-          draggable={false}
-          onDragStart={(e) => e.preventDefault()}
-          onClick={(e) => onSelect(file, e.ctrlKey || e.metaKey || e.shiftKey)}
-          onDoubleClick={() => onOpen(file)}
-          onContextMenu={(e) => onMenu(file, e)}
-          className={`bg-kumo-base ring-kumo-hairline group relative overflow-hidden rounded-xl ring-1 ${selected.has(file.path) ? "ring-2 ring-kumo-info" : ""
-            }`}
-        >
-          <img
-            src={api.thumbUrl(file.path)}
-            alt={file.name}
-            loading="lazy"
-            draggable={false}
-            className="aspect-square w-full object-cover pointer-events-none select-none"
-          />
-          <p className="truncate px-3 py-2 text-left text-xs leading-5 select-none" title={file.name}>
-            {file.name}
-          </p>
-        </button>
-      ))}
     </div>
   );
 }
