@@ -101,7 +101,7 @@ export function Sidebar({ currentDir, onNavigate, mobileOpen = false, onMobileCl
             className="hover:bg-kumo-tint flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-left"
           >
             <HardDrivesIcon size={28} weight="fill" className="text-kumo-brand shrink-0" />
-            <span className="text-lg font-semibold truncate">filebrowser</span>
+            <span className="text-lg font-semibold truncate">File Browser</span>
           </button>
           {onMobileClose && (
             <Button

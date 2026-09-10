@@ -1,4 +1,4 @@
-# filebrowser
+# File Browser
 
 A web file browser served by a single Go binary with an embedded React app.
 Anyone can browse, upload, and download. Optional accounts add
