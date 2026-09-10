@@ -76,7 +76,8 @@ function SingleInfo({
           <img
             src={api.bigUrl(file.path)}
             alt={file.name}
-            className="ring-kumo-hairline max-h-48 w-full rounded-lg object-contain ring-1"
+            draggable={false}
+            className="ring-kumo-hairline max-h-48 w-full rounded-lg object-contain ring-1 pointer-events-none select-none"
           />
         )}
 

@@ -12,6 +12,11 @@ body {
     @apply bg-kumo-canvas text-kumo-default antialiased;
 }
 
+img {
+    -webkit-user-drag: none;
+    user-drag: none;
+}
+
 .scrollbar-slim {
     scrollbar-width: thin;
     scrollbar-color: color-mix(in srgb, var(--color-kumo-line) 75%, transparent) transparent;

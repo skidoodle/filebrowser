@@ -127,6 +127,7 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
     setDragOver(false);
     dragCounter.current = 0;
     if (!canWriteHere) return; // uploads need write access here
+    if (!e.dataTransfer.types || !Array.from(e.dataTransfer.types).includes("Files")) return;
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) enqueue(dir, files);
   };
@@ -270,11 +271,13 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
             className="relative min-w-0 flex-1 overflow-y-auto p-3 select-none md:p-4"
             onDragEnter={(e) => {
               e.preventDefault();
+              if (!e.dataTransfer.types || !Array.from(e.dataTransfer.types).includes("Files")) return;
               dragCounter.current++;
               setDragOver(true);
             }}
             onDragOver={(e) => e.preventDefault()}
-            onDragLeave={() => {
+            onDragLeave={(e) => {
+              if (!e.dataTransfer.types || !Array.from(e.dataTransfer.types).includes("Files")) return;
               dragCounter.current--;
               if (dragCounter.current <= 0) {
                 dragCounter.current = 0;
@@ -424,6 +427,8 @@ function GalleryGrid({ items, selected, onSelect, onOpen, onMenu }: GalleryGridP
           type="button"
           data-file-item
           data-path={file.path}
+          draggable={false}
+          onDragStart={(e) => e.preventDefault()}
           onClick={(e) => onSelect(file, e.ctrlKey || e.metaKey || e.shiftKey)}
           onDoubleClick={() => onOpen(file)}
           onContextMenu={(e) => onMenu(file, e)}
@@ -434,9 +439,10 @@ function GalleryGrid({ items, selected, onSelect, onOpen, onMenu }: GalleryGridP
             src={api.thumbUrl(file.path)}
             alt={file.name}
             loading="lazy"
-            className="aspect-square w-full object-cover"
+            draggable={false}
+            className="aspect-square w-full object-cover pointer-events-none select-none"
           />
-          <p className="truncate px-3 py-2 text-left text-xs leading-5" title={file.name}>
+          <p className="truncate px-3 py-2 text-left text-xs leading-5 select-none" title={file.name}>
             {file.name}
           </p>
         </button>
