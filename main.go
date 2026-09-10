@@ -98,24 +98,23 @@ func run() error {
 		return err
 	}
 
-	var grd *guard.Guard
-	if cfg.Guard {
-		proxies := make([]string, 0, len(cfg.TrustedProxies))
-		for _, p := range cfg.TrustedProxies {
-			proxies = append(proxies, p.String())
-		}
-		grd, err = guard.New(guard.Config{
-			TrustedProxies: proxies,
-			RequestRate:    cfg.RequestRate,
-			DownloadRate:   cfg.DownloadRate,
-			Difficulty:     cfg.PowDifficulty,
-			Secret:         cfg.Secret,
-			CacheDir:       cfg.CacheDir,
-		}, log)
-		if err != nil {
-			return err
-		}
-	} else {
+	proxies := make([]string, 0, len(cfg.TrustedProxies))
+	for _, p := range cfg.TrustedProxies {
+		proxies = append(proxies, p.String())
+	}
+	grd, err := guard.New(guard.Config{
+		TrustedProxies: proxies,
+		RequestRate:    cfg.RequestRate,
+		DownloadRate:   cfg.DownloadRate,
+		Difficulty:     cfg.PowDifficulty,
+		Secret:         cfg.Secret,
+		CacheDir:       cfg.CacheDir,
+		Disabled:       !cfg.Guard,
+	}, log)
+	if err != nil {
+		return err
+	}
+	if !cfg.Guard {
 		log.Info("guard disabled by configuration")
 	}
 

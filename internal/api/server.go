@@ -10,7 +10,10 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/skidoodle/filebrowser/internal/auth"
@@ -23,19 +26,21 @@ import (
 
 // Server wires configuration, storage and the HTTP mux together.
 type Server struct {
-	cfg      *config.Config
-	store    storage.Storage
-	appStore *store.Store
-	log      *slog.Logger
-	web      fs.FS
-	version  string
-	commit   string
-	guard    *guard.Guard
-	tokens   *guard.Tokens
-	auth     *auth.Manager
-	authz    *authz.Engine
-	mux      *http.ServeMux
-	tus      *tusRegistry
+	mu        sync.RWMutex
+	cfg       *config.Config
+	store     storage.Storage
+	appStore  *store.Store
+	log       *slog.Logger
+	web       fs.FS
+	version   string
+	commit    string
+	guard     *guard.Guard
+	tokens    *guard.Tokens
+	auth      *auth.Manager
+	authz     *authz.Engine
+	mux       *http.ServeMux
+	tus       *tusRegistry
+	startTime time.Time
 }
 
 // Options configures a new Server.
@@ -68,21 +73,27 @@ func New(o Options) (*Server, error) {
 	if appSt == nil && o.Auth != nil {
 		appSt = o.Auth.Store()
 	}
-	s := &Server{
-		cfg:      o.Config,
-		store:    o.Store,
-		appStore: appSt,
-		log:      o.Log,
-		web:      o.Web,
-		version:  o.Version,
-		commit:   o.Commit,
-		guard:    o.Guard,
-		tokens:   tokens,
-		auth:     o.Auth,
-		authz:    o.Authz,
-		mux:      http.NewServeMux(),
-		tus:      newTusRegistry(o.Store, o.Log, o.Config.MaxUpload, 3*time.Hour),
+	var maxUpload int64 = 10 << 30
+	if o.Config != nil && o.Config.MaxUpload > 0 {
+		maxUpload = o.Config.MaxUpload
 	}
+	s := &Server{
+		cfg:       o.Config,
+		store:     o.Store,
+		appStore:  appSt,
+		log:       o.Log,
+		web:       o.Web,
+		version:   o.Version,
+		commit:    o.Commit,
+		guard:     o.Guard,
+		tokens:    tokens,
+		auth:      o.Auth,
+		authz:     o.Authz,
+		mux:       http.NewServeMux(),
+		tus:       newTusRegistry(o.Store, o.Log, maxUpload, 3*time.Hour),
+		startTime: time.Now(),
+	}
+	s.loadPersistedSettings()
 	if err := s.routes(); err != nil {
 		return nil, err
 	}
@@ -145,10 +156,122 @@ func (s *Server) routes() error {
 	s.mux.Handle("GET /api/settings/policy", s.admin(http.HandlerFunc(s.handleGetPolicy)))
 	s.mux.Handle("PUT /api/settings/policy", s.admin(http.HandlerFunc(s.handleSetPolicy)))
 
+	// System settings & runtime info.
+	s.mux.Handle("GET /api/settings/system", s.admin(http.HandlerFunc(s.handleGetSystemSettings)))
+	s.mux.Handle("PUT /api/settings/system", s.admin(http.HandlerFunc(s.handleUpdateSystemSettings)))
+
 	if s.web != nil {
 		s.mux.Handle("/", s.spaHandler())
 	}
 	return nil
+}
+
+func (s *Server) maxUpload() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg != nil {
+		return s.cfg.MaxUpload
+	}
+	return 10 << 30
+}
+
+func (s *Server) loadPersistedSettings() {
+	if s.appStore == nil || s.cfg == nil {
+		return
+	}
+	if s.applyPersistedMeta() && s.guard != nil {
+		proxies := make([]string, 0, len(s.cfg.TrustedProxies))
+		for _, p := range s.cfg.TrustedProxies {
+			proxies = append(proxies, p.String())
+		}
+		s.guard.UpdateConfig(!s.cfg.Guard, s.cfg.RequestRate, s.cfg.DownloadRate, s.cfg.PowDifficulty, proxies)
+	}
+}
+
+func (s *Server) applyPersistedMeta() bool {
+	guardUpdated := false
+	s.loadPersistedUploadLimits()
+	if s.loadMetaBool("guard", &s.cfg.Guard) {
+		guardUpdated = true
+	}
+	if s.loadMetaInt("request_rate", 1, 1_000_000, &s.cfg.RequestRate) {
+		guardUpdated = true
+	}
+	if s.loadMetaInt64("download_rate", 1, &s.cfg.DownloadRate) {
+		guardUpdated = true
+	}
+	if s.loadMetaInt("pow_difficulty", 0, 16, &s.cfg.PowDifficulty) {
+		guardUpdated = true
+	}
+	if s.loadMetaProxies() {
+		guardUpdated = true
+	}
+	return guardUpdated
+}
+
+func (s *Server) loadPersistedUploadLimits() {
+	if s.loadMetaInt64("max_upload", 1, &s.cfg.MaxUpload) && s.tus != nil {
+		s.tus.setMaxSize(s.cfg.MaxUpload)
+	}
+	_ = s.loadMetaInt64("max_text_size", 1, &s.cfg.MaxTextSize)
+}
+
+func (s *Server) loadMetaInt64(key string, minVal int64, dst *int64) bool {
+	v, err := s.appStore.GetMeta(key)
+	if err != nil || v == "" {
+		return false
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n < minVal {
+		return false
+	}
+	*dst = n
+	return true
+}
+
+func (s *Server) loadMetaInt(key string, minVal, maxVal int, dst *int) bool {
+	v, err := s.appStore.GetMeta(key)
+	if err != nil || v == "" {
+		return false
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < minVal || n > maxVal {
+		return false
+	}
+	*dst = n
+	return true
+}
+
+func (s *Server) loadMetaBool(key string, dst *bool) bool {
+	v, err := s.appStore.GetMeta(key)
+	if err != nil || v == "" {
+		return false
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return false
+	}
+	*dst = b
+	return true
+}
+
+func (s *Server) loadMetaProxies() bool {
+	v, err := s.appStore.GetMeta("trusted_proxies")
+	if err != nil || v == "" {
+		return false
+	}
+	var prefixes []netip.Prefix
+	for cidr := range strings.SplitSeq(v, ",") {
+		cidr = strings.TrimSpace(cidr)
+		if cidr == "" {
+			continue
+		}
+		if p, err := netip.ParsePrefix(cidr); err == nil {
+			prefixes = append(prefixes, p.Masked())
+		}
+	}
+	s.cfg.TrustedProxies = prefixes
+	return true
 }
 
 // capability wraps a mutation handler with the guard's capability check.

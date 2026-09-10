@@ -8,6 +8,15 @@ body,
     height: 100%;
 }
 
+html {
+    scrollbar-gutter: stable;
+}
+
+.overflow-y-auto,
+[class*="overflow-y-auto"] {
+    scrollbar-gutter: stable;
+}
+
 body {
     @apply bg-kumo-canvas text-kumo-default antialiased;
 }

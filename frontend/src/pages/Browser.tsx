@@ -268,7 +268,7 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
         >
           <main
             ref={listingRef}
-            className="relative min-w-0 flex-1 overflow-y-auto p-3 select-none md:p-4"
+            className="relative min-w-0 flex-1 overflow-y-auto scrollbar-gutter-stable p-3 select-none md:p-4"
             onDragEnter={(e) => {
               e.preventDefault();
               if (!e.dataTransfer.types || !Array.from(e.dataTransfer.types).includes("Files")) return;

@@ -113,6 +113,18 @@ func (r *tusRegistry) remove(id string) {
 	delete(r.sessions, id)
 }
 
+func (r *tusRegistry) setMaxSize(size int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.maxSize = size
+}
+
+func (r *tusRegistry) getMaxSize() int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.maxSize
+}
+
 // tusID returns a random URL-safe session id.
 func tusID() (string, error) {
 	b := make([]byte, 16)
@@ -133,7 +145,7 @@ func (s *Server) handleTusOptions(w http.ResponseWriter, _ *http.Request) {
 	h := w.Header()
 	h.Set("Tus-Version", "1.0.0")
 	h.Set("Tus-Extension", "creation,termination")
-	h.Set("Tus-Max-Size", strconv.FormatInt(s.cfg.MaxUpload, 10))
+	h.Set("Tus-Max-Size", strconv.FormatInt(s.maxUpload(), 10))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -212,7 +224,7 @@ func (s *Server) resolveTusTarget(w http.ResponseWriter, r *http.Request, meta m
 		apiError(w, http.StatusBadRequest, "missing or invalid Upload-Length")
 		return "", 0, false
 	}
-	if length > s.tus.maxSize {
+	if length > s.tus.getMaxSize() {
 		apiError(w, http.StatusRequestEntityTooLarge, "upload exceeds maximum size")
 		return "", 0, false
 	}

@@ -60,6 +60,7 @@ func newTestServerCfg(t *testing.T, tc testServerConfig) (*httptest.Server, stor
 		CacheDir:     t.TempDir(),
 		Insecure:     tc.Insecure,
 		AccessPolicy: tc.AccessPolicy,
+		Guard:        tc.Guard,
 	}
 	log := slog.New(slog.DiscardHandler)
 	fsStore, err := local.New(cfg.Root)

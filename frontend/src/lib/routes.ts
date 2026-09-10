@@ -1,4 +1,4 @@
-export type SettingsTab = "profile" | "users" | "policy";
+export type SettingsTab = "profile" | "users" | "policy" | "system" | "about";
 export type CreateKind = "dir" | "file";
 
 export type AppRoute =
@@ -100,7 +100,7 @@ function routeFromPath(pathname: string, backgroundDir?: string, backgroundEdit?
     case "settings": {
       if (segments.length > 2) return null;
       const tab = segments[1] ?? "profile";
-      if (tab !== "profile" && tab !== "users" && tab !== "policy") return null;
+      if (tab !== "profile" && tab !== "users" && tab !== "policy" && tab !== "system" && tab !== "about") return null;
       return { page: "settings", tab, dir: backgroundDir ?? "." };
     }
     case "login":

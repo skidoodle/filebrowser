@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/netip"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -28,6 +29,7 @@ type Config struct {
 
 // Guard orchestrates the abuse-protection middleware chain.
 type Guard struct {
+	mu     sync.RWMutex
 	cfg    Config
 	req    *limiter
 	dl     *limiter
@@ -81,8 +83,12 @@ var suspiciousUA = []string{
 
 // ipKey returns the rate-limit/ban key for a request.
 func (g *Guard) ipKey(r *http.Request) string {
-	trusted := make([]netip.Prefix, 0, len(g.cfg.TrustedProxies))
-	for _, c := range g.cfg.TrustedProxies {
+	g.mu.RLock()
+	proxies := g.cfg.TrustedProxies
+	g.mu.RUnlock()
+
+	trusted := make([]netip.Prefix, 0, len(proxies))
+	for _, c := range proxies {
 		if p, err := netip.ParsePrefix(c); err == nil {
 			trusted = append(trusted, p.Masked())
 		}
@@ -92,10 +98,15 @@ func (g *Guard) ipKey(r *http.Request) string {
 
 // Middleware is the outer chain: honeypot → ban → rate limit.
 func (g *Guard) Middleware(next http.Handler) http.Handler {
-	if g.cfg.Disabled {
-		return next
-	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		g.mu.RLock()
+		disabled := g.cfg.Disabled
+		g.mu.RUnlock()
+		if disabled {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		key := g.ipKey(r)
 
 		if honeypot(r.URL.Path) {
@@ -128,10 +139,15 @@ func (g *Guard) Middleware(next http.Handler) http.Handler {
 // RequireCapability wraps mutating handlers: they need a valid
 // X-Capability header minted by the SPA.
 func (g *Guard) RequireCapability(next http.Handler) http.Handler {
-	if g.cfg.Disabled {
-		return next
-	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		g.mu.RLock()
+		disabled := g.cfg.Disabled
+		g.mu.RUnlock()
+		if disabled {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		token := r.Header.Get("X-Capability")
 		if !g.Tokens.Verify(token) {
 			w.Header().Set("X-Capability", "challenge")
@@ -146,7 +162,10 @@ func (g *Guard) RequireCapability(next http.Handler) http.Handler {
 // payloads consume the budget as it refills rather than being rejected for
 // exceeding the burst, so big files download reliably at the configured rate.
 func (g *Guard) AllowDownload(r *http.Request, n int64) bool {
-	if g.cfg.Disabled || n <= 0 {
+	g.mu.RLock()
+	disabled := g.cfg.Disabled
+	g.mu.RUnlock()
+	if disabled || n <= 0 {
 		return true
 	}
 	key := g.ipKey(r)
@@ -188,4 +207,32 @@ func suspiciousUserAgent(ua string) bool {
 func SuspiciousUserAgent(ua string) bool { return suspiciousUserAgent(ua) }
 
 // PowDifficulty returns the configured proof-of-work difficulty.
-func (g *Guard) PowDifficulty() int { return g.cfg.Difficulty }
+func (g *Guard) PowDifficulty() int {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.cfg.Difficulty
+}
+
+// UpdateConfig updates runtime configuration parameters on the guard chain.
+func (g *Guard) UpdateConfig(disabled bool, reqRate int, dlRate int64, diff int, proxies []string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.cfg.Disabled = disabled
+	g.cfg.RequestRate = reqRate
+	g.cfg.DownloadRate = dlRate
+	g.cfg.Difficulty = diff
+	g.cfg.TrustedProxies = proxies
+	if g.req != nil {
+		g.req.setRate(float64(reqRate), float64(reqRate)*2)
+	}
+	if g.dl != nil {
+		g.dl.setRate(float64(dlRate), float64(dlRate))
+	}
+}
+
+// Config returns a copy of the current guard configuration.
+func (g *Guard) Config() Config {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.cfg
+}

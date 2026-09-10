@@ -26,6 +26,14 @@ func newLimiter(rate, burst float64) *limiter {
 	}
 }
 
+// setRate updates the token replenishment rate and burst limit.
+func (l *limiter) setRate(rate, burst float64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.rate = rate
+	l.burst = burst
+}
+
 // allow consumes cost tokens; it reports whether the budget sufficed.
 func (l *limiter) allow(key string, cost float64) bool {
 	l.mu.Lock()
