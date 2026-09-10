@@ -45,6 +45,7 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
   const selection = useSelection();
   const enqueue = useUploads((s) => s.enqueue);
   const [dragOver, setDragOver] = useState(false);
+  const dragCounter = useRef(0);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const [moveTarget, setMoveTarget] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
@@ -124,6 +125,7 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setDragOver(false);
+    dragCounter.current = 0;
     if (!canWriteHere) return; // uploads need write access here
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) enqueue(dir, files);
@@ -265,12 +267,20 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
         >
           <main
             ref={listingRef}
-            className="min-w-0 flex-1 overflow-y-auto p-3 select-none md:p-4"
-            onDragOver={(e) => {
+            className="relative min-w-0 flex-1 overflow-y-auto p-3 select-none md:p-4"
+            onDragEnter={(e) => {
               e.preventDefault();
+              dragCounter.current++;
               setDragOver(true);
             }}
-            onDragLeave={() => setDragOver(false)}
+            onDragOver={(e) => e.preventDefault()}
+            onDragLeave={() => {
+              dragCounter.current--;
+              if (dragCounter.current <= 0) {
+                dragCounter.current = 0;
+                setDragOver(false);
+              }
+            }}
             onDrop={onDrop}
             onMouseDown={marquee}
             onContextMenu={backgroundMenu}
@@ -324,8 +334,12 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
             )}
 
             {dragOver && (
-              <div className="border-kumo-line text-kumo-subtle pointer-events-none fixed inset-16 z-40 flex items-center justify-center rounded-xl border-2 border-dashed text-lg">
-                Drop files to upload here
+              <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-kumo-canvas/80 backdrop-blur-sm animate-[fadeIn_150ms_ease-out]">
+                <div className="border-kumo-info flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed px-12 py-10">
+                  <UploadSimpleIcon size={40} weight="duotone" className="text-kumo-info" />
+                  <p className="text-kumo-default text-base font-semibold">Drop files to upload</p>
+                  <p className="text-kumo-subtle text-sm">Files will be uploaded to this folder</p>
+                </div>
               </div>
             )}
           </main>

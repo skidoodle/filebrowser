@@ -169,3 +169,13 @@ div.fixed.w-full.max-w-2xl {
         transform: scale(1);
     }
 }
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
