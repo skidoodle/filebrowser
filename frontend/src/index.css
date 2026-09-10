@@ -157,3 +157,15 @@ div.fixed.w-full.max-w-2xl {
         transition: none;
     }
 }
+
+@keyframes dragLift {
+    from {
+        opacity: 0.6;
+        transform: scale(0.97);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}

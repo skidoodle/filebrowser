@@ -1,7 +1,8 @@
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useDraggable,
   useDroppable,
   useSensor,
@@ -12,6 +13,7 @@ import {
 import { useMemo, useState, type ReactNode } from "react";
 import { withBasePath } from "../lib/base";
 import { joinPath } from "../lib/path";
+import { formatBytes, formatRelative } from "../lib/format";
 import { FileTypeIcon } from "../lib/icons";
 import type { FileInfo } from "../types";
 
@@ -65,7 +67,10 @@ interface AdminDndProps {
 
 export function AdminDnd({ enabled, items, selection, onMoved, children }: AdminDndProps) {
   const [source, setSource] = useState<DragPayload | null>(null);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+  );
 
   const sourceInfo = useMemo(
     () => (source ? (items.find((i) => i.path === source.path) ?? null) : null),
@@ -112,16 +117,28 @@ export function AdminDnd({ enabled, items, selection, onMoved, children }: Admin
       onDragEnd={(event) => void onDragEnd(event)}
     >
       {children}
-      <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)" }}>
+      <DragOverlay dropAnimation={{ duration: 250, easing: "cubic-bezier(0.25, 1, 0.5, 1)" }}>
         {sourceInfo && (
-          <div className="bg-kumo-elevated ring-kumo-line pointer-events-none flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 shadow-xl ring-1">
-            <FileTypeIcon type={sourceInfo.type} size={22} />
-            <span className="text-kumo-default max-w-56 truncate text-sm font-medium">{sourceInfo.name}</span>
-            {extraCount > 0 && (
-              <span className="bg-kumo-info-tint text-kumo-info rounded-full px-2 py-0.5 text-xs font-semibold">
-                +{extraCount}
-              </span>
-            )}
+          <div className="pointer-events-none animate-[dragLift_150ms_ease-out]">
+            <div className="bg-kumo-base ring-kumo-hairline relative flex items-start gap-3 rounded-xl p-4 shadow-xl ring-1">
+              <FileTypeIcon type={sourceInfo.type} size={40} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold leading-6">
+                  {sourceInfo.name}
+                </p>
+                <p className="text-kumo-subtle mt-0.5 text-sm">
+                  {sourceInfo.isDir ? "—" : formatBytes(sourceInfo.size)}
+                </p>
+                <p className="text-kumo-subtle mt-0.5 text-sm">
+                  {formatRelative(sourceInfo.modified)}
+                </p>
+              </div>
+              {extraCount > 0 && (
+                <span className="bg-kumo-info text-white absolute -top-2 -right-2 flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-bold shadow">
+                  +{extraCount}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </DragOverlay>
