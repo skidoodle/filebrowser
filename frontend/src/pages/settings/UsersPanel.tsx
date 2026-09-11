@@ -74,7 +74,7 @@ export function UsersPanel() {
                     {u.admin ? "Full access" : u.scope ? `Scope: /${u.scope}` : "No scope set"}
                   </p>
                 </div>
-                <Badge variant={u.admin ? "primary" : "secondary"}>{u.admin ? "Admin" : "Scoped"}</Badge>
+                <Badge variant={u.admin ? "primary" : "secondary"} className="shrink-0">{u.admin ? "Admin" : "Scoped"}</Badge>
                 <div className="flex shrink-0">
                   <Button variant="ghost" shape="square" aria-label={`Edit ${u.username}`} icon={<PencilSimpleIcon size={16} />} onClick={() => setFormTarget(formTarget !== "new" && formTarget?.id === u.id ? null : u)} />
                   <Button

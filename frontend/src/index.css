@@ -26,6 +26,15 @@ img {
     user-drag: none;
 }
 
+.scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+    display: none;
+}
+
 .scrollbar-slim {
     scrollbar-width: thin;
     scrollbar-color: color-mix(in srgb, var(--color-kumo-line) 75%, transparent) transparent;

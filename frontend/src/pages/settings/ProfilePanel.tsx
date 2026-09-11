@@ -60,7 +60,7 @@ export function ProfilePanel() {
           </span>
           <div className="min-w-0">
             <p className="truncate text-base font-semibold">{me.data?.username ?? "—"}</p>
-            <p className="text-kumo-subtle text-sm">{role}</p>
+            <p className="text-kumo-subtle truncate text-sm" title={role}>{role}</p>
           </div>
         </div>
         {!me.data?.insecure && (

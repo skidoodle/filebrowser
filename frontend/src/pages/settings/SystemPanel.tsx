@@ -93,9 +93,9 @@ export function SystemSettingsForm({ initial }: { initial: SystemDynamicSettings
 
         <div className="bg-kumo-base ring-kumo-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl p-5 ring-1">
           <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-semibold">Maximum Upload Size</span>
-              <Badge variant="secondary">{formatBytes(parsedMaxUpload)}</Badge>
+              <Badge variant="secondary" className="shrink-0">{formatBytes(parsedMaxUpload)}</Badge>
             </div>
             <p className="text-kumo-subtle text-sm leading-relaxed">
               Upper bound for upload streams and chunked uploads (e.g. 10GiB, 500MiB).
@@ -112,9 +112,9 @@ export function SystemSettingsForm({ initial }: { initial: SystemDynamicSettings
 
         <div className="bg-kumo-base ring-kumo-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl p-5 ring-1">
           <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-semibold">Text Preview Size</span>
-              <Badge variant="secondary">{formatBytes(parsedMaxText)}</Badge>
+              <Badge variant="secondary" className="shrink-0">{formatBytes(parsedMaxText)}</Badge>
             </div>
             <p className="text-kumo-subtle text-sm leading-relaxed">
               Maximum file size rendered into the built-in text and code viewer (e.g. 10MiB).
@@ -131,9 +131,9 @@ export function SystemSettingsForm({ initial }: { initial: SystemDynamicSettings
 
         <div className="bg-kumo-base ring-kumo-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl p-5 ring-1">
           <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-semibold">API Request Rate</span>
-              <Badge variant="secondary">{requestRate} req/s</Badge>
+              <Badge variant="secondary" className="shrink-0">{requestRate} req/s</Badge>
             </div>
             <p className="text-kumo-subtle text-sm leading-relaxed">
               Per-IP request budget before rate limiting throttles requests.
@@ -151,9 +151,9 @@ export function SystemSettingsForm({ initial }: { initial: SystemDynamicSettings
 
         <div className="bg-kumo-base ring-kumo-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl p-5 ring-1">
           <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-semibold">Download Rate Limit</span>
-              <Badge variant="secondary">{formatBytes(parsedDownloadRate)}/s</Badge>
+              <Badge variant="secondary" className="shrink-0">{formatBytes(parsedDownloadRate)}/s</Badge>
             </div>
             <p className="text-kumo-subtle text-sm leading-relaxed">
               Per-IP download bandwidth throttle for raw file streams (e.g. 200MiB).
@@ -170,9 +170,9 @@ export function SystemSettingsForm({ initial }: { initial: SystemDynamicSettings
 
         <div className="bg-kumo-base ring-kumo-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl p-5 ring-1">
           <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-semibold">Proof-of-Work Difficulty</span>
-              <Badge variant="secondary">{powDifficulty === 0 ? "Disabled" : `${powDifficulty} hex zeros`}</Badge>
+              <Badge variant="secondary" className="shrink-0">{powDifficulty === 0 ? "Disabled" : `${powDifficulty} hex zeros`}</Badge>
             </div>
             <p className="text-kumo-subtle text-sm leading-relaxed">
               Leading zero count required in proof-of-work challenges for anonymous mutations (0 disables).

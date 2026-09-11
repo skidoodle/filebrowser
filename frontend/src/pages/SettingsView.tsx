@@ -8,6 +8,7 @@ import {
   ShieldCheckIcon,
   SlidersHorizontalIcon,
 } from "@phosphor-icons/react";
+import { useEffect, useRef } from "react";
 import { useMe } from "../lib/useMe";
 import type { SettingsTab } from "../lib/routes";
 import {
@@ -30,6 +31,7 @@ interface SettingsViewProps {
 export function SettingsView({ tab, onTabChange, onClose, onOpenMobileMenu }: SettingsViewProps) {
   const me = useMe();
   const admin = me.data?.admin === true;
+  const tabListRef = useRef<HTMLElement>(null);
 
   const tabs: { id: SettingsTab; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
     { id: "profile", label: "Profile", icon: <KeyIcon size={16} /> },
@@ -38,6 +40,15 @@ export function SettingsView({ tab, onTabChange, onClose, onOpenMobileMenu }: Se
     { id: "system", label: "System", icon: <SlidersHorizontalIcon size={16} />, adminOnly: true },
     { id: "about", label: "About", icon: <InfoIcon size={16} />, adminOnly: true },
   ];
+
+  useEffect(() => {
+    const container = tabListRef.current;
+    if (!container) return;
+    const activeEl = container.querySelector<HTMLElement>('[data-active="true"]');
+    if (activeEl) {
+      activeEl.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    }
+  }, [tab]);
 
   return (
     <main className="bg-kumo-canvas text-kumo-default min-w-0 flex-1 overflow-y-auto scrollbar-gutter-stable">
@@ -60,23 +71,32 @@ export function SettingsView({ tab, onTabChange, onClose, onOpenMobileMenu }: Se
           )}
         </div>
 
-        <div className="border-kumo-hairline mb-6 flex gap-1 border-b">
-          {tabs
-            .filter((t) => !t.adminOnly || admin)
-            .map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => onTabChange(t.id)}
-                className={`-mb-px flex cursor-pointer items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${tab === t.id
-                  ? "border-kumo-brand text-kumo-brand"
-                  : "text-kumo-subtle hover:text-kumo-default border-transparent"
-                  }`}
-              >
-                {t.icon}
-                {t.label}
-              </button>
-            ))}
+        <div className="border-kumo-hairline -mx-4 mb-6 border-b sm:mx-0">
+          <nav
+            ref={tabListRef}
+            aria-label="Settings sections"
+            className="scrollbar-none -mb-px flex gap-1 overflow-x-auto overflow-y-hidden px-4 touch-pan-x sm:px-0"
+          >
+            {tabs
+              .filter((t) => !t.adminOnly || admin)
+              .map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  data-active={tab === t.id}
+                  onClick={() => onTabChange(t.id)}
+                  className={`flex shrink-0 whitespace-nowrap cursor-pointer items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors ${tab === t.id
+                    ? "border-kumo-brand text-kumo-brand"
+                    : "text-kumo-subtle hover:text-kumo-default border-transparent"
+                    }`}
+                >
+                  {t.icon}
+                  {t.label}
+                </button>
+              ))}
+          </nav>
         </div>
 
         {tab === "profile" ? (

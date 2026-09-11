@@ -67,8 +67,8 @@ export function PolicyPanel() {
               key={opt.id}
               onClick={() => setOverride(opt.id)}
               className={`bg-kumo-base ring-kumo-hairline flex min-h-22 cursor-pointer items-start gap-4 rounded-xl p-5 ring-1 transition-colors ${isSelected
-                  ? "ring-kumo-brand ring-2 bg-kumo-brand-tint/10"
-                  : "hover:bg-kumo-tint/20"
+                ? "ring-kumo-brand ring-2 bg-kumo-brand-tint/10"
+                : "hover:bg-kumo-tint/20"
                 }`}
             >
               <input
@@ -78,12 +78,12 @@ export function PolicyPanel() {
                 onChange={() => setOverride(opt.id)}
                 className="mt-1 cursor-pointer accent-kumo-brand"
               />
-              <div className="flex flex-1 flex-col gap-1">
-                <div className="flex min-h-6 items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="flex min-h-6 items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold">{opt.title}</span>
                     {opt.badge && (
-                      <Badge variant="secondary">
+                      <Badge variant="secondary" className="shrink-0">
                         {opt.badge}
                       </Badge>
                     )}
