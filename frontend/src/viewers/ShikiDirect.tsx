@@ -13,7 +13,8 @@ export function ShikiDirect({ code, lang }: { code: string; lang: string }) {
       .then((out) => {
         if (!cancelled) setHtml(out);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        console.warn("Shiki highlight error:", err);
         if (!cancelled) {
           setHtml(
             `<pre class="shiki-plain"><code>${code

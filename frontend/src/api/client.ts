@@ -2,7 +2,19 @@ import { mutate } from "./capability";
 import { withBasePath } from "../lib/base";
 import { currentRoute, navigate } from "../lib/router";
 import { getEditToken } from "../lib/tokens";
-import type { FileMeta, FileInfo, Health, Listing, Usage } from "../types";
+import {
+  FileMetaSchema,
+  FileInfoSchema,
+  HealthSchema,
+  ListingSchema,
+  UsageSchema,
+  type FileInfo,
+} from "../types";
+import { z } from "zod";
+
+const CreateFileResponseSchema = FileInfoSchema.extend({
+  edit_token: z.string().optional(),
+});
 
 function adminInit(init: RequestInit = {}): RequestInit {
   const headers = new Headers(init.headers);
@@ -34,30 +46,31 @@ async function errorMessage(res: Response): Promise<string> {
   return res.statusText;
 }
 
-async function json<T>(res: Response): Promise<T> {
+async function parseJson<T>(res: Response, schema: z.ZodType<T>): Promise<T> {
   if (!res.ok) {
     throw new Error(await errorMessage(res));
   }
-  return res.json() as Promise<T>;
+  const raw = await res.json();
+  return schema.parse(raw);
 }
 
 export type SortBy = "name" | "size" | "modified";
 export type SortOrder = "asc" | "desc";
 
 export const api = {
-  health: () => fetch(withBasePath("/api/health")).then((r) => json<Health>(r)),
+  health: () => fetch(withBasePath("/api/health")).then((r) => parseJson(r, HealthSchema)),
 
   list: (path: string, sort: SortBy = "name", order: SortOrder = "asc") =>
     fetch(withBasePath(`/api/list?path=${encodeURIComponent(path)}&sort=${sort}&order=${order}`)).then((r) =>
-      json<Listing>(r),
+      parseJson(r, ListingSchema),
     ),
 
   meta: (path: string, checksum?: string) =>
     fetch(
       withBasePath(`/api/meta?path=${encodeURIComponent(path)}${checksum ? `&checksum=${checksum}` : ""}`),
-    ).then((r) => json<FileMeta>(r)),
+    ).then((r) => parseJson(r, FileMetaSchema)),
 
-  usage: () => fetch(withBasePath("/api/usage")).then((r) => json<Usage>(r)),
+  usage: () => fetch(withBasePath("/api/usage")).then((r) => parseJson(r, UsageSchema)),
 
   search: async (q: string, limit = 50, path?: string): Promise<FileInfo[]> => {
     const params = new URLSearchParams({ q, limit: String(limit) });
@@ -70,7 +83,7 @@ export const api = {
     return text
       .split("\n")
       .filter((line) => line.trim().length > 0)
-      .map((line) => JSON.parse(line) as FileInfo);
+      .map((line) => FileInfoSchema.parse(JSON.parse(line)));
   },
 
   createDir: (path: string) =>
@@ -78,14 +91,14 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path }),
-    }).then((r) => json<FileInfo>(r)),
+    }).then((r) => parseJson(r, FileInfoSchema)),
 
   createFile: (path: string) =>
     mutate(withBasePath("/api/file"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path }),
-    }).then((r) => json<FileInfo & { edit_token?: string }>(r)),
+    }).then((r) => parseJson(r, CreateFileResponseSchema)),
 
   rawUrl: (path: string, inline = false) =>
     withBasePath(`/api/raw?path=${encodeURIComponent(path)}${inline ? "&inline=true" : ""}`),

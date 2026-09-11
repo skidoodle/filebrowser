@@ -119,10 +119,12 @@ export function CodeViewer({
   if (error) return <p className="text-kumo-danger p-6">{error}</p>;
   if (code === null) return <p className="text-kumo-subtle p-6">loading…</p>;
 
-  const ext = (extension ?? "").toLowerCase();
+  const fileName = path.split("/").pop() ?? "";
+  const ext = (extension || (fileName.includes(".") ? fileName.split(".").pop() : fileName) || "").toLowerCase();
   const lang = EXT_TO_LANG[ext] ?? "";
   const isPlain = !lang || lang === "plaintext" || ext === "txt" || ext === "text" || ext === "log";
-  const highlight = !isPlain && size !== undefined && size <= PLAIN_TEXT_MAX;
+  const effectiveSize = size ?? (code !== null ? code.length : 0);
+  const highlight = !isPlain && effectiveSize <= PLAIN_TEXT_MAX;
 
   const langLabel = !highlight
     ? "Plain text"

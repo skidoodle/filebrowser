@@ -335,7 +335,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 // spaCSP locks the embedded app down: everything same-origin, styles may be
 // inline (pdf.js/video.js inject them), objects and framing are banned.
-const spaCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+const spaCSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
 	"img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; " +
 	"connect-src 'self'; worker-src 'self' blob:; object-src 'none'; " +
 	"frame-ancestors 'none'; base-uri 'none'; form-action 'none'"

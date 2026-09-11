@@ -1,41 +1,50 @@
-export type FileType = "dir" | "video" | "audio" | "image" | "pdf" | "text" | "blob";
+import { z } from "zod";
 
-export interface FileInfo {
-  name: string;
-  path: string;
-  size: number;
-  modified: string;
-  isDir: boolean;
-  type: FileType;
-  mime?: string;
-  extension?: string;
-  private?: boolean;
-}
+export const FileTypeSchema = z.enum(["dir", "video", "audio", "image", "pdf", "text", "blob"]);
+export type FileType = z.infer<typeof FileTypeSchema>;
 
-export interface Listing {
-  items: FileInfo[];
-  numDirs: number;
-  numFiles: number;
-  total: number;
-}
+export const FileInfoSchema = z.object({
+  name: z.string(),
+  path: z.string(),
+  size: z.number(),
+  modified: z.string(),
+  isDir: z.boolean(),
+  type: FileTypeSchema,
+  mime: z.string().optional(),
+  extension: z.string().optional(),
+  private: z.boolean().optional(),
+});
+export type FileInfo = z.infer<typeof FileInfoSchema>;
 
-export interface Usage {
-  used: number;
-  total: number;
-}
+export const ListingSchema = z.object({
+  items: z.array(FileInfoSchema),
+  numDirs: z.number(),
+  numFiles: z.number(),
+  total: z.number(),
+});
+export type Listing = z.infer<typeof ListingSchema>;
 
-export interface Health {
-  status: string;
-  version: string;
-  commit: string;
-}
+export const UsageSchema = z.object({
+  used: z.number(),
+  total: z.number(),
+});
+export type Usage = z.infer<typeof UsageSchema>;
 
-export interface FileMeta extends FileInfo {
-  checksums?: Record<string, string>;
-}
+export const HealthSchema = z.object({
+  status: z.string(),
+  version: z.string(),
+  commit: z.string(),
+});
+export type Health = z.infer<typeof HealthSchema>;
 
-export interface Me {
-  admin: boolean;
-  insecure: boolean;
-  initialized: boolean;
-}
+export const FileMetaSchema = FileInfoSchema.extend({
+  checksums: z.record(z.string(), z.string()).optional(),
+});
+export type FileMeta = z.infer<typeof FileMetaSchema>;
+
+export const MeSchema = z.object({
+  admin: z.boolean(),
+  insecure: z.boolean(),
+  initialized: z.boolean(),
+});
+export type Me = z.infer<typeof MeSchema>;

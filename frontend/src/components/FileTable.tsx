@@ -1,4 +1,5 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useRef, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import { useFolderDrop, useItemDrag } from "./dnd";
 import { useMe } from "../lib/useMe";
 import { canWriteIn, canWritePath } from "../lib/permissions";
@@ -13,11 +14,30 @@ interface FileTableProps {
   onSelect: (file: FileInfo, additive: boolean) => void;
   onOpen: (file: FileInfo) => void;
   onMenu: (file: FileInfo, e: ReactMouseEvent<HTMLElement>) => void;
+  scrollRef?: RefObject<HTMLDivElement | null>;
 }
 
-export function FileTable({ items, selected, onSelect, onOpen, onMenu }: FileTableProps) {
+export function FileTable({ items, selected, onSelect, onOpen, onMenu, scrollRef }: FileTableProps) {
+  "use no memo";
+  const tableRef = useRef<HTMLTableElement>(null);
+
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const rowVirtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollRef?.current ?? (tableRef.current?.closest("main") as HTMLDivElement | null),
+    estimateSize: () => 49,
+    overscan: 12,
+  });
+
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+  const paddingBottom =
+    virtualItems.length > 0
+      ? rowVirtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end
+      : 0;
+
   return (
-    <table className="w-full table-fixed border-collapse text-sm">
+    <table ref={tableRef} className="w-full table-fixed border-collapse text-sm">
       <thead>
         <tr className="text-kumo-subtle border-kumo-hairline border-b text-left">
           <th className="px-2 py-2.5 font-medium sm:px-3">Name</th>
@@ -26,16 +46,30 @@ export function FileTable({ items, selected, onSelect, onOpen, onMenu }: FileTab
         </tr>
       </thead>
       <tbody>
-        {items.map((file) => (
-          <FileRow
-            key={file.path}
-            file={file}
-            isSelected={selected.has(file.path)}
-            onSelect={onSelect}
-            onOpen={onOpen}
-            onMenu={onMenu}
-          />
-        ))}
+        {paddingTop > 0 && (
+          <tr aria-hidden="true">
+            <td colSpan={3} style={{ height: `${paddingTop}px` }} />
+          </tr>
+        )}
+        {virtualItems.map((virtualRow) => {
+          const file = items[virtualRow.index];
+          if (!file) return null;
+          return (
+            <FileRow
+              key={file.path}
+              file={file}
+              isSelected={selected.has(file.path)}
+              onSelect={onSelect}
+              onOpen={onOpen}
+              onMenu={onMenu}
+            />
+          );
+        })}
+        {paddingBottom > 0 && (
+          <tr aria-hidden="true">
+            <td colSpan={3} style={{ height: `${paddingBottom}px` }} />
+          </tr>
+        )}
       </tbody>
     </table>
   );

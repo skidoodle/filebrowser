@@ -31,5 +31,19 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     chunkSizeWarningLimit: 1500,
+    rolldownOptions: {
+      output: {
+        chunkFileNames: "assets/[hash].js",
+        codeSplitting: {
+          groups: [
+            {
+              name: "vendor",
+              test: /node_modules/,
+              entriesAware: true,
+            },
+          ],
+        },
+      },
+    },
   },
 });

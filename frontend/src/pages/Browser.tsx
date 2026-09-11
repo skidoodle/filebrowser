@@ -69,18 +69,55 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
   const privateToggle = useMutation({
     mutationFn: ({ path, makePrivate }: { path: string; makePrivate: boolean }) =>
       makePrivate ? auth.setPrivate(path) : auth.unsetPrivate(path),
-    onSuccess: () => {
+    onMutate: async ({ path, makePrivate }) => {
+      const targetQueryKey = ["list", dir, prefs.sortBy, prefs.sortOrder];
+      await queryClient.cancelQueries({ queryKey: targetQueryKey });
+      const previousList = queryClient.getQueryData<{ path: string; items: FileInfo[] }>(targetQueryKey);
+      if (previousList) {
+        queryClient.setQueryData(targetQueryKey, {
+          ...previousList,
+          items: previousList.items.map((item) =>
+            item.path === path ? { ...item, private: makePrivate } : item
+          ),
+        });
+      }
+      return { previousList, targetQueryKey };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousList) {
+        queryClient.setQueryData(context.targetQueryKey, context.previousList);
+      }
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["list"] });
     },
   });
 
   const del = useMutation({
     mutationFn: (paths: string[]) => api.delete(paths),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["list"] });
-      void queryClient.invalidateQueries({ queryKey: ["usage"] });
+    onMutate: async (paths: string[]) => {
+      const targetQueryKey = ["list", dir, prefs.sortBy, prefs.sortOrder];
+      await queryClient.cancelQueries({ queryKey: targetQueryKey });
+      const previousList = queryClient.getQueryData<{ path: string; items: FileInfo[] }>(targetQueryKey);
+      if (previousList) {
+        const pathSet = new Set(paths);
+        queryClient.setQueryData(targetQueryKey, {
+          ...previousList,
+          items: previousList.items.filter((item) => !pathSet.has(item.path)),
+        });
+      }
       selection.clear();
       setConfirmDelete(null);
+      return { previousList, targetQueryKey };
+    },
+    onError: (_err, _paths, context) => {
+      if (context?.previousList) {
+        queryClient.setQueryData(context.targetQueryKey, context.previousList);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["list"] });
+      void queryClient.invalidateQueries({ queryKey: ["usage"] });
     },
   });
 
@@ -317,6 +354,7 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
                 onSelect={selectEntry}
                 onOpen={open}
                 onMenu={itemContextMenu}
+                scrollRef={listingRef}
               />
             )}
 

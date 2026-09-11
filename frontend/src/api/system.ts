@@ -1,33 +1,37 @@
+import { z } from "zod";
 import { withBasePath } from "../lib/base";
 
-export interface SystemDynamicSettings {
-  max_upload: number; // bytes
-  max_text_size: number; // bytes
-  guard: boolean;
-  request_rate: number; // req/s
-  download_rate: number; // bytes/s
-  pow_difficulty: number;
-  trusted_proxies: string;
-}
+export const SystemDynamicSettingsSchema = z.object({
+  max_upload: z.number(),
+  max_text_size: z.number(),
+  guard: z.boolean(),
+  request_rate: z.number(),
+  download_rate: z.number(),
+  pow_difficulty: z.number(),
+  trusted_proxies: z.string(),
+});
+export type SystemDynamicSettings = z.infer<typeof SystemDynamicSettingsSchema>;
 
-export interface SystemInfo {
-  root: string;
-  database: string;
-  cache_dir: string;
-  base_url: string;
-  address: string;
-  version: string;
-  commit: string;
-  os: string;
-  arch: string;
-  go_version: string;
-  uptime_seconds: number;
-}
+export const SystemInfoSchema = z.object({
+  root: z.string(),
+  database: z.string(),
+  cache_dir: z.string(),
+  base_url: z.string(),
+  address: z.string(),
+  version: z.string(),
+  commit: z.string(),
+  os: z.string(),
+  arch: z.string(),
+  go_version: z.string(),
+  uptime_seconds: z.number(),
+});
+export type SystemInfo = z.infer<typeof SystemInfoSchema>;
 
-export interface SystemSettingsResponse {
-  dynamic: SystemDynamicSettings;
-  info: SystemInfo;
-}
+export const SystemSettingsResponseSchema = z.object({
+  dynamic: SystemDynamicSettingsSchema,
+  info: SystemInfoSchema,
+});
+export type SystemSettingsResponse = z.infer<typeof SystemSettingsResponseSchema>;
 
 export interface UpdateSystemSettingsRequest {
   max_upload?: number;
@@ -55,7 +59,8 @@ export const system = {
       headers: { Origin: window.location.origin },
     });
     if (!res.ok) throw new Error(await jsonError(res));
-    return res.json() as Promise<SystemSettingsResponse>;
+    const raw = await res.json();
+    return SystemSettingsResponseSchema.parse(raw);
   },
 
   update: async (data: UpdateSystemSettingsRequest): Promise<SystemSettingsResponse> => {
@@ -65,6 +70,7 @@ export const system = {
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error(await jsonError(res));
-    return res.json() as Promise<SystemSettingsResponse>;
+    const raw = await res.json();
+    return SystemSettingsResponseSchema.parse(raw);
   },
 };

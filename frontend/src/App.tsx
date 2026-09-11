@@ -1,16 +1,22 @@
+import { Loader } from "@cloudflare/kumo";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { auth } from "./api/auth";
-import { AuthScreen } from "./components/AuthScreen";
 import { NewItemDialog } from "./components/NewItemDialog";
 import { SearchOverlay } from "./components/SearchOverlay";
 import { Sidebar } from "./components/Sidebar";
 import { UploadPanel } from "./components/UploadPanel";
 import { navigate, useRoute } from "./lib/router";
 import { Browser } from "./pages/Browser";
-import { SettingsView } from "./pages/SettingsView";
 import { usePrefs, type Theme } from "./stores/prefs";
 import { ViewerOverlay } from "./viewers/ViewerOverlay";
+
+const SettingsView = lazy(() =>
+  import("./pages/SettingsView").then((m) => ({ default: m.SettingsView }))
+);
+const AuthScreen = lazy(() =>
+  import("./components/AuthScreen").then((m) => ({ default: m.AuthScreen }))
+);
 
 function useThemeEffect(theme: Theme) {
   useEffect(() => {
@@ -82,14 +88,18 @@ export default function App() {
   }, [me.data, signedIn, loginMode, dir]);
 
   if (loginMode !== null) {
-    return <AuthScreen key={loginMode} mode={loginMode} />;
+    return (
+      <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center bg-kumo-canvas"><Loader size="lg" /></div>}>
+        <AuthScreen key={loginMode} mode={loginMode} />
+      </Suspense>
+    );
   }
 
   // Admin-only settings tabs fallback to profile for regular accounts.
   const effectiveTab =
     (settingsTab === "users" || settingsTab === "policy" || settingsTab === "system" || settingsTab === "about") &&
-    me.data &&
-    !me.data.admin
+      me.data &&
+      !me.data.admin
       ? "profile"
       : settingsTab;
 
@@ -103,12 +113,14 @@ export default function App() {
       />
 
       {effectiveTab !== null && signedIn ? (
-        <SettingsView
-          tab={effectiveTab}
-          onTabChange={(tab) => navigate({ page: "settings", tab, dir }, { replace: true })}
-          onClose={() => navigate({ page: "files", dir }, { replace: true })}
-          onOpenMobileMenu={openMobileMenu}
-        />
+        <Suspense fallback={<main className="flex min-w-0 flex-1 items-center justify-center bg-kumo-canvas"><Loader size="lg" /></main>}>
+          <SettingsView
+            tab={effectiveTab}
+            onTabChange={(tab) => navigate({ page: "settings", tab, dir }, { replace: true })}
+            onClose={() => navigate({ page: "files", dir }, { replace: true })}
+            onOpenMobileMenu={openMobileMenu}
+          />
+        </Suspense>
       ) : (
         <Browser
           onSearch={() => setSearchOpen(true)}
