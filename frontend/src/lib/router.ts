@@ -5,6 +5,8 @@ import { matchRoute, parseRoute, routePath as canonicalRoutePath, type AppRoute 
 export { parseRoute } from "./routes";
 export type { AppRoute, CreateKind, SettingsTab } from "./routes";
 
+import { z } from "zod";
+
 interface NavigateOptions {
   replace?: boolean;
 }
@@ -12,25 +14,20 @@ interface NavigateOptions {
 const HISTORY_STATE_KEY = "filebrowserRoute";
 const listeners = new Set<() => void>();
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+const RouteHistoryStateSchema = z.object({
+  dir: z.string().optional(),
+  edit: z.boolean().optional(),
+});
 
-function storedDirectory(state: unknown): string | undefined {
-  if (!isRecord(state)) return undefined;
-  const routeState = state[HISTORY_STATE_KEY];
-  if (!isRecord(routeState) || typeof routeState.dir !== "string") return undefined;
-  return routeState.dir;
-}
-
-function storedEdit(state: unknown): boolean | undefined {
-  if (!isRecord(state)) return undefined;
-  const routeState = state[HISTORY_STATE_KEY];
-  return isRecord(routeState) && routeState.edit === true ? true : undefined;
+function readStoredState(state: unknown): { dir?: string; edit?: boolean } {
+  if (typeof state !== "object" || state === null) return {};
+  const routeState = (state as Record<string, unknown>)[HISTORY_STATE_KEY];
+  const parsed = RouteHistoryStateSchema.safeParse(routeState);
+  return parsed.success ? parsed.data : {};
 }
 
 function historyState(route: AppRoute): Record<string, unknown> {
-  const current = isRecord(window.history.state) ? window.history.state : {};
+  const current = typeof window.history.state === "object" && window.history.state !== null ? window.history.state : {};
   const stored: Record<string, unknown> = { dir: route.dir };
   if (route.page === "viewer" && route.edit) {
     stored.edit = true;
@@ -40,7 +37,8 @@ function historyState(route: AppRoute): Record<string, unknown> {
 
 function readRoute(): AppRoute {
   const pathname = withoutBasePath(window.location.pathname) ?? "/";
-  return parseRoute(pathname, storedDirectory(window.history.state), storedEdit(window.history.state));
+  const stored = readStoredState(window.history.state);
+  return parseRoute(pathname, stored.dir, stored.edit ? true : undefined);
 }
 
 let snapshot = readRoute();

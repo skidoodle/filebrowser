@@ -1,17 +1,28 @@
 import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { z } from "zod";
 import type { SortBy, SortOrder } from "../api/client";
 
-export type ViewMode = "list" | "mosaic" | "gallery";
-export type Theme = "system" | "dark" | "light";
+export const ViewModeSchema = z.enum(["list", "mosaic", "gallery"]);
+export type ViewMode = z.infer<typeof ViewModeSchema>;
 
-interface PrefsState {
-  viewMode: ViewMode;
-  sortBy: SortBy;
-  sortOrder: SortOrder;
-  theme: Theme;
-  infoPanel: boolean;
+export const ThemeSchema = z.enum(["system", "dark", "light"]);
+export type Theme = z.infer<typeof ThemeSchema>;
+
+const SortBySchema = z.enum(["name", "size", "modified"]);
+const SortOrderSchema = z.enum(["asc", "desc"]);
+
+export const PrefsDataSchema = z.object({
+  viewMode: ViewModeSchema.catch("mosaic"),
+  sortBy: SortBySchema.catch("name"),
+  sortOrder: SortOrderSchema.catch("asc"),
+  theme: ThemeSchema.catch("system"),
+  infoPanel: z.boolean().catch(false),
+});
+export type PrefsData = z.infer<typeof PrefsDataSchema>;
+
+interface PrefsState extends PrefsData {
   setViewMode: (v: ViewMode) => void;
   setSortBy: (v: SortBy) => void;
   setSortOrder: (v: SortOrder) => void;
@@ -33,7 +44,16 @@ export const usePrefs = create<PrefsState>()(
       setTheme: (theme) => set({ theme }),
       toggleInfoPanel: () => set((s) => ({ infoPanel: !s.infoPanel })),
     }),
-    { name: "filebrowser-prefs" },
+    {
+      name: "filebrowser-prefs",
+      merge: (persistedState, currentState) => {
+        const parsed = PrefsDataSchema.safeParse(persistedState);
+        return {
+          ...currentState,
+          ...(parsed.success ? parsed.data : {}),
+        };
+      },
+    },
   ),
 );
 

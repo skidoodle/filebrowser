@@ -42,9 +42,43 @@ export const FileMetaSchema = FileInfoSchema.extend({
 });
 export type FileMeta = z.infer<typeof FileMetaSchema>;
 
+export const AccessPolicySchema = z.enum(["public", "readonly", "private"]);
+export type AccessPolicy = z.infer<typeof AccessPolicySchema>;
+
 export const MeSchema = z.object({
   admin: z.boolean(),
   insecure: z.boolean(),
   initialized: z.boolean(),
+  username: z.string().optional(),
+  scope: z.string().optional(),
+  access_policy: AccessPolicySchema.optional(),
 });
 export type Me = z.infer<typeof MeSchema>;
+
+export const UserSchema = z.object({
+  id: z.number(),
+  username: z.string(),
+  admin: z.boolean(),
+  scope: z.string(),
+  isOriginal: z.boolean(),
+});
+export type User = z.infer<typeof UserSchema>;
+
+export const UsernameSchema = z
+  .string()
+  .trim()
+  .min(1, "Username is required")
+  .max(64, "Username must be 64 characters or fewer")
+  .regex(/^[a-zA-Z0-9._-]+$/, "Username may only contain letters, digits, and . _ -");
+
+export const PasswordSchema = z
+  .string()
+  .min(8, "Password must be at least 8 characters");
+
+export const NewUserSchema = z.object({
+  username: UsernameSchema,
+  password: PasswordSchema,
+  admin: z.boolean(),
+  scope: z.string(),
+});
+export type NewUser = z.infer<typeof NewUserSchema>;

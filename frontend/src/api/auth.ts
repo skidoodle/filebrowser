@@ -1,23 +1,18 @@
+import { z } from "zod";
 import { withBasePath } from "../lib/base";
+import {
+  AccessPolicySchema,
+  MeSchema,
+  NewUserSchema,
+  UserSchema,
+  type AccessPolicy,
+  type Me,
+  type NewUser,
+  type User,
+} from "../types";
 
-export type AccessPolicy = "public" | "readonly" | "private";
-
-export interface Me {
-  admin: boolean;
-  insecure: boolean;
-  initialized: boolean;
-  username?: string;
-  scope?: string;
-  access_policy?: AccessPolicy;
-}
-
-export interface User {
-  id: number;
-  username: string;
-  admin: boolean;
-  scope: string;
-  isOriginal: boolean;
-}
+export type { AccessPolicy, Me, NewUser, User };
+export { AccessPolicySchema, MeSchema, NewUserSchema, UserSchema };
 
 async function jsonError(res: Response): Promise<string> {
   try {
@@ -29,6 +24,12 @@ async function jsonError(res: Response): Promise<string> {
   return res.statusText;
 }
 
+async function parseJson<T>(res: Response, schema: z.ZodType<T>): Promise<T> {
+  if (!res.ok) throw new Error(await jsonError(res));
+  const raw = await res.json();
+  return schema.parse(raw);
+}
+
 async function expectNoContent(res: Response): Promise<void> {
   if (res.status === 401) throw new Error("Invalid credentials");
   if (res.status === 409) throw new Error("Account already exists");
@@ -38,10 +39,7 @@ async function expectNoContent(res: Response): Promise<void> {
 }
 
 export const auth = {
-  me: () => fetch(withBasePath("/api/me")).then((r) => {
-    if (!r.ok) throw new Error(r.statusText);
-    return r.json() as Promise<Me>;
-  }),
+  me: () => fetch(withBasePath("/api/me")).then((r) => parseJson(r, MeSchema)),
 
   setup: (password: string) =>
     fetch(withBasePath("/api/auth/setup"), {
@@ -101,8 +99,7 @@ export const auth = {
     const res = await fetch(withBasePath("/api/settings/policy"), {
       headers: { Origin: window.location.origin },
     });
-    if (!res.ok) throw new Error(await jsonError(res));
-    const data = (await res.json()) as { access_policy: AccessPolicy };
+    const data = await parseJson(res, z.object({ access_policy: AccessPolicySchema }));
     return data.access_policy;
   },
 
@@ -116,34 +113,15 @@ export const auth = {
   },
 };
 
-export interface NewUser {
-  username: string;
-  password: string;
-  admin: boolean;
-  scope: string;
-}
-
-export interface User {
-  id: number;
-  username: string;
-  admin: boolean;
-  scope: string;
-  isOriginal: boolean;
-}
-
-async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) throw new Error(await jsonError(res));
-  return res.json() as Promise<T>;
-}
-
 export const users = {
-  list: () => fetch(withBasePath("/api/users")).then((r) => json<User[]>(r)),
+  list: () => fetch(withBasePath("/api/users")).then((r) => parseJson(r, z.array(UserSchema))),
 
   create: async (u: NewUser): Promise<void> => {
+    const payload = NewUserSchema.parse(u);
     const res = await fetch(withBasePath("/api/users"), {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: window.location.origin },
-      body: JSON.stringify(u),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(await jsonError(res));
   },
