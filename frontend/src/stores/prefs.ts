@@ -60,10 +60,11 @@ export const usePrefs = create<PrefsState>()(
 export function useEffectiveTheme(): "dark" | "light" {
   const theme = usePrefs((s) => s.theme);
   const [systemDark, setSystemDark] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches,
+    () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches,
   );
 
   useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => setSystemDark(mql.matches);
     mql.addEventListener("change", apply);
@@ -73,4 +74,35 @@ export function useEffectiveTheme(): "dark" | "light" {
   if (theme === "dark") return "dark";
   if (theme === "light") return "light";
   return systemDark ? "dark" : "light";
+}
+
+export function applyTheme(theme?: Theme) {
+  if (typeof window === "undefined") return;
+  const current = theme ?? usePrefs.getState().theme;
+  const dark =
+    current === "dark" ||
+    (current === "system" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const mode = dark ? "dark" : "light";
+  document.documentElement.dataset.mode = mode;
+  document.documentElement.style.colorScheme = mode;
+}
+
+applyTheme();
+
+if (typeof window !== "undefined") {
+  usePrefs.subscribe((state, prevState) => {
+    if (state.theme !== prevState.theme) {
+      applyTheme(state.theme);
+    }
+  });
+
+  if (typeof window.matchMedia === "function") {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+      if (usePrefs.getState().theme === "system") {
+        applyTheme("system");
+      }
+    });
+  }
 }

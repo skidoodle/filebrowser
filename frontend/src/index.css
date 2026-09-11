@@ -10,6 +10,25 @@ body,
 
 html {
     scrollbar-gutter: stable;
+    @apply bg-kumo-canvas text-kumo-default;
+}
+
+#root {
+    animation: fadeIn 150ms ease-out;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-mode="light"]) {
+        color-scheme: dark;
+    }
+}
+
+:root[data-mode="dark"] {
+    color-scheme: dark;
+}
+
+:root[data-mode="light"] {
+    color-scheme: light;
 }
 
 .overflow-y-auto,

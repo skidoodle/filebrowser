@@ -8,7 +8,6 @@ import { Sidebar } from "./components/Sidebar";
 import { UploadPanel } from "./components/UploadPanel";
 import { navigate, useRoute } from "./lib/router";
 import { Browser } from "./pages/Browser";
-import { usePrefs, type Theme } from "./stores/prefs";
 import { ViewerOverlay } from "./viewers/ViewerOverlay";
 
 const SettingsView = lazy(() =>
@@ -18,21 +17,7 @@ const AuthScreen = lazy(() =>
   import("./components/AuthScreen").then((m) => ({ default: m.AuthScreen }))
 );
 
-function useThemeEffect(theme: Theme) {
-  useEffect(() => {
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => {
-      const effective = theme === "system" ? (mql.matches ? "dark" : "light") : theme;
-      document.documentElement.dataset.mode = effective;
-    };
-    apply();
-    mql.addEventListener("change", apply);
-    return () => mql.removeEventListener("change", apply);
-  }, [theme]);
-}
-
 export default function App() {
-  const prefs = usePrefs();
   const route = useRoute();
   const dir = route.dir;
   const newKind = route.page === "create" ? route.kind : null;
@@ -44,8 +29,6 @@ export default function App() {
   const settingsTab = route.page === "settings" ? route.tab : null;
 
   const me = useQuery({ queryKey: ["me"], queryFn: auth.me, staleTime: 60_000 });
-
-  useThemeEffect(prefs.theme);
 
   // Onboarding an uninitialized server redirects the first visit to the create-account screen.
   useEffect(() => {
