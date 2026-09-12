@@ -67,7 +67,7 @@ export function TopBar({
   const fileInput = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="border-kumo-hairline bg-kumo-canvas/90 sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-3 md:px-4">
+    <div className="border-kumo-hairline bg-kumo-canvas/90 sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-3 select-none md:px-4">
       {onOpenMobileMenu && (
         <Button
           type="button"

@@ -16,7 +16,7 @@ export function DirBreadcrumbs({ dir, admin = false }: DirBreadcrumbsProps) {
   const goHome = () => navigate({ page: "files", dir: "." }, { replace: atRoot });
 
   return (
-    <nav aria-label="Folder path" className="mb-3 flex h-9 min-w-0 items-center gap-0.5 px-1">
+    <nav aria-label="Folder path" className="mb-3 flex h-9 min-w-0 items-center gap-0.5 px-1 select-none">
       <DropTarget path="" enabled={admin} className="inline-flex rounded">
         <Button
           variant="ghost"
