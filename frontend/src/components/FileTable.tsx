@@ -118,8 +118,8 @@ function FileRow({ file, isSelected, onSelect, onOpen, onMenu }: FileRowProps) {
     >
       <td className="px-2 py-3 sm:px-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <FileTypeIcon type={file.type} size={22} />
-          <span className="truncate leading-6 font-medium" title={file.name}>
+          <FileTypeIcon type={file.type} size={22} className="shrink-0" />
+          <span className="truncate leading-6 font-medium min-w-0 flex-1" title={file.name}>
             {file.name}
           </span>
         </div>

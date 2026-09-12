@@ -45,7 +45,7 @@ export function FileCard({ file, selected, onSelect, onOpen, onMenu }: FileCardP
         } ${drag.isDragging ? "opacity-30 outline-2 outline-dashed outline-kumo-info" : ""} ${drop.isOver ? "scale-[1.03] ring-2 ring-kumo-success shadow-lg" : ""
         }`}
     >
-      <FileTypeIcon type={file.type} size={40} />
+      <FileTypeIcon type={file.type} size={40} className="shrink-0" />
       <div className="min-w-0 flex-1">
         <p className="truncate leading-6 text-sm font-semibold" title={file.name}>
           {file.name}
