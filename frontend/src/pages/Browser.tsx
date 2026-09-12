@@ -34,6 +34,7 @@ import { navigate, routePath, useRoute } from "../lib/router";
 import { usePrefs } from "../stores/prefs";
 import { useSelection } from "../stores/selection";
 import { useUploads } from "../stores/uploads";
+import { isTouchPointer } from "../lib/pointer";
 import type { FileInfo } from "../types";
 
 interface BrowserProps {
@@ -257,6 +258,7 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
 
   const backgroundMenu = (e: ReactMouseEvent) => {
     e.preventDefault();
+    if (isTouchPointer(e)) return;
     setMenu({
       x: e.clientX,
       y: e.clientY,
@@ -312,7 +314,7 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
         >
           <main
             ref={listingRef}
-            className="relative min-w-0 flex-1 overflow-y-auto scrollbar-gutter-stable p-3 select-none md:p-4"
+            className="relative min-w-0 flex-1 overflow-y-auto scrollbar-gutter-stable p-3 select-none touch-manipulation md:p-4"
             onDragEnter={(e) => {
               e.preventDefault();
               if (!e.dataTransfer.types || !Array.from(e.dataTransfer.types).includes("Files")) return;

@@ -2,7 +2,7 @@ import { Empty } from "@cloudflare/kumo";
 import { DotsThreeVerticalIcon } from "@phosphor-icons/react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { api } from "../api/client";
-import { useLongPress } from "../lib/useLongPress";
+import { isTouchPointer } from "../lib/pointer";
 import type { FileInfo } from "../types";
 
 export interface GalleryGridProps {
@@ -26,19 +26,12 @@ function GalleryItem({
   onOpen: (file: FileInfo) => void;
   onMenu: (file: FileInfo, e: ReactMouseEvent<HTMLElement>) => void;
 }) {
-  const longPress = useLongPress({
-    onLongPress: (coords) => {
-      onMenu(file, coords as unknown as ReactMouseEvent<HTMLElement>);
-    },
-  });
-
   return (
     <div
       role="button"
       tabIndex={0}
       data-file-item
       data-path={file.path}
-      {...longPress.handlers}
       onClick={(e) => onSelect(file, e.ctrlKey || e.metaKey || e.shiftKey)}
       onDoubleClick={() => onOpen(file)}
       onKeyDown={(e) => {
@@ -46,11 +39,11 @@ function GalleryItem({
       }}
       onContextMenu={(e) => {
         e.preventDefault();
+        if (isTouchPointer(e)) return;
         onMenu(file, e);
       }}
-      className={`bg-kumo-base ring-kumo-hairline group relative overflow-hidden rounded-xl ring-1 cursor-pointer ${
-        isSelected ? "ring-2 ring-kumo-info" : ""
-      }`}
+      className={`bg-kumo-base ring-kumo-hairline group relative overflow-hidden rounded-xl ring-1 cursor-pointer select-none touch-manipulation ${isSelected ? "ring-2 ring-kumo-info" : ""
+        }`}
     >
       <img
         src={api.thumbUrl(file.path)}
@@ -73,8 +66,8 @@ function GalleryItem({
             onMenu(file, {
               clientX: rect.left,
               clientY: rect.bottom + 4,
-              preventDefault: () => {},
-              stopPropagation: () => {},
+              preventDefault: () => { },
+              stopPropagation: () => { },
             } as unknown as ReactMouseEvent<HTMLElement>);
           }}
           className="text-kumo-subtle hover:text-kumo-default hover:bg-kumo-tint -mr-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg cursor-pointer md:hidden"

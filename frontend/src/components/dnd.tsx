@@ -2,6 +2,7 @@ import {
   DndContext,
   DragOverlay,
   MouseSensor,
+  TouchSensor,
   useDraggable,
   useDroppable,
   useSensor,
@@ -93,6 +94,12 @@ export function AdminDnd({ enabled, items, selection, onMoved, viewMode, childre
   const [source, setSource] = useState<DragPayload | null>(null);
   const sensors = useSensors(
     useSensor(LeftClickMouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
+      },
+    }),
   );
 
   const sourceInfo = useMemo(

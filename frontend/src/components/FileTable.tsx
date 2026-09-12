@@ -7,7 +7,7 @@ import { canWriteIn, canWritePath } from "../lib/permissions";
 import { formatBytes, formatRelative } from "../lib/format";
 import { FileTypeIcon } from "../lib/icons";
 import { mergeRefs } from "../lib/refs";
-import { useLongPress } from "../lib/useLongPress";
+import { isTouchPointer } from "../lib/pointer";
 import type { FileInfo } from "../types";
 
 export interface FileTableProps {
@@ -97,17 +97,11 @@ function FileRow({ file, isSelected, onSelect, onOpen, onMenu }: FileRowProps) {
   const canWrite = canWritePath(me, file.path);
   const drag = useItemDrag(file, canWrite);
   const drop = useFolderDrop({ path: file.path, isDir: file.isDir }, canWriteIn(me, file.path));
-  const longPress = useLongPress({
-    onLongPress: (coords) => {
-      onMenu(file, coords as unknown as ReactMouseEvent<HTMLElement>);
-    },
-  });
 
   return (
     <tr
       ref={mergeRefs(drag.ref, drop.ref)}
       {...drag.handleProps}
-      {...longPress.handlers}
       data-file-item
       data-path={file.path}
       onClick={(e) => onSelect(file, e.ctrlKey || e.metaKey || e.shiftKey)}
@@ -115,9 +109,10 @@ function FileRow({ file, isSelected, onSelect, onOpen, onMenu }: FileRowProps) {
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (isTouchPointer(e)) return;
         onMenu(file, e);
       }}
-      className={`border-kumo-hairline hover:bg-kumo-tint cursor-grab active:cursor-grabbing border-b ${isSelected ? "bg-kumo-info-tint/50" : ""
+      className={`border-kumo-hairline hover:bg-kumo-tint cursor-grab active:cursor-grabbing border-b select-none touch-manipulation ${isSelected ? "bg-kumo-info-tint/50" : ""
         } ${drag.isDragging ? "opacity-30 outline-2 outline-dashed outline-kumo-info" : ""} ${drop.isOver ? "bg-kumo-success-tint/70 shadow-inner" : ""
         }`}
     >
@@ -146,8 +141,8 @@ function FileRow({ file, isSelected, onSelect, onOpen, onMenu }: FileRowProps) {
             onMenu(file, {
               clientX: rect.left,
               clientY: rect.bottom + 4,
-              preventDefault: () => {},
-              stopPropagation: () => {},
+              preventDefault: () => { },
+              stopPropagation: () => { },
             } as unknown as ReactMouseEvent<HTMLElement>);
           }}
           className="text-kumo-subtle hover:text-kumo-default hover:bg-kumo-tint inline-flex h-8 w-8 items-center justify-center rounded-lg cursor-pointer"

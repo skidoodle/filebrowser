@@ -6,7 +6,7 @@ import { canWriteIn, canWritePath } from "../lib/permissions";
 import { formatBytes, formatRelative } from "../lib/format";
 import { FileTypeIcon } from "../lib/icons";
 import { mergeRefs } from "../lib/refs";
-import { useLongPress } from "../lib/useLongPress";
+import { isTouchPointer } from "../lib/pointer";
 import type { FileInfo } from "../types";
 
 interface FileCardProps {
@@ -22,11 +22,6 @@ export function FileCard({ file, selected, onSelect, onOpen, onMenu }: FileCardP
   const canWrite = canWritePath(me, file.path);
   const drag = useItemDrag(file, canWrite);
   const drop = useFolderDrop({ path: file.path, isDir: file.isDir }, canWriteIn(me, file.path));
-  const longPress = useLongPress({
-    onLongPress: (coords) => {
-      onMenu(file, coords as unknown as ReactMouseEvent<HTMLElement>);
-    },
-  });
 
   return (
     <div
@@ -34,7 +29,6 @@ export function FileCard({ file, selected, onSelect, onOpen, onMenu }: FileCardP
       tabIndex={0}
       ref={mergeRefs(drag.ref, drop.ref)}
       {...drag.handleProps}
-      {...longPress.handlers}
       data-file-item
       data-path={file.path}
       onClick={(e) => onSelect(file, e.ctrlKey || e.metaKey || e.shiftKey)}
@@ -44,9 +38,10 @@ export function FileCard({ file, selected, onSelect, onOpen, onMenu }: FileCardP
       }}
       onContextMenu={(e) => {
         e.preventDefault();
+        if (isTouchPointer(e)) return;
         onMenu(file, e);
       }}
-      className={`bg-kumo-base ring-kumo-hairline relative flex cursor-grab active:cursor-grabbing items-start gap-3 rounded-xl p-4 ring-1 transition-shadow hover:shadow-md ${selected ? "ring-2 ring-kumo-info" : ""
+      className={`bg-kumo-base ring-kumo-hairline relative flex cursor-grab active:cursor-grabbing items-start gap-3 rounded-xl p-4 ring-1 transition-shadow hover:shadow-md select-none touch-manipulation ${selected ? "ring-2 ring-kumo-info" : ""
         } ${drag.isDragging ? "opacity-30 outline-2 outline-dashed outline-kumo-info" : ""} ${drop.isOver ? "scale-[1.03] ring-2 ring-kumo-success shadow-lg" : ""
         }`}
     >
@@ -70,8 +65,8 @@ export function FileCard({ file, selected, onSelect, onOpen, onMenu }: FileCardP
           onMenu(file, {
             clientX: rect.left,
             clientY: rect.bottom + 4,
-            preventDefault: () => {},
-            stopPropagation: () => {},
+            preventDefault: () => { },
+            stopPropagation: () => { },
           } as unknown as ReactMouseEvent<HTMLElement>);
         }}
         className="text-kumo-subtle hover:text-kumo-default hover:bg-kumo-tint -mr-1.5 -mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg cursor-pointer md:hidden"
