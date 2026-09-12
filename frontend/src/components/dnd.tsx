@@ -8,8 +8,9 @@ import {
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
+  type MouseSensorOptions,
 } from "@dnd-kit/core";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { withBasePath } from "../lib/base";
 import { joinPath } from "../lib/path";
 import { formatBytes, formatRelative } from "../lib/format";
@@ -64,10 +65,30 @@ interface AdminDndProps {
   children: ReactNode;
 }
 
+/**
+ * Custom MouseSensor that restricts drag initiation exclusively to left-click (event.button === 0).
+ * Prevents middle click, right click, or side mouse buttons (mouse4/mouse5 / back/forward)
+ * from triggering drag operations.
+ */
+class LeftClickMouseSensor extends MouseSensor {
+  static activators = [
+    {
+      eventName: "onMouseDown" as const,
+      handler: ({ nativeEvent: event }: ReactMouseEvent, { onActivation }: MouseSensorOptions) => {
+        if (event.button !== 0) {
+          return false;
+        }
+        onActivation?.({ event });
+        return true;
+      },
+    },
+  ];
+}
+
 export function AdminDnd({ enabled, items, selection, onMoved, children }: AdminDndProps) {
   const [source, setSource] = useState<DragPayload | null>(null);
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(LeftClickMouseSensor, { activationConstraint: { distance: 8 } }),
   );
 
   const sourceInfo = useMemo(
