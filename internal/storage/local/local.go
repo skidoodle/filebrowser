@@ -12,15 +12,11 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 
 	"github.com/skidoodle/filebrowser/internal/fsutil"
 	"github.com/skidoodle/filebrowser/internal/storage"
 )
-
-// reservedDir is a hidden namespace at the storage root holding durable
-// server state (admin credentials, session key). It is invisible and
-// inaccessible through the Storage port.
-const reservedDir = ".filebrowser"
 
 // Storage is the local filesystem adapter.
 type Storage struct {
@@ -54,9 +50,6 @@ func (s *Storage) resolve(p string) (string, string, error) {
 	rel, err := fsutil.Clean(p)
 	if err != nil {
 		return "", "", err
-	}
-	if isReserved(rel) {
-		return "", "", os.ErrPermission
 	}
 	abs := filepath.Join(s.root, filepath.FromSlash(rel))
 
@@ -98,20 +91,6 @@ func evalExisting(abs string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(evalAncestor, filepath.FromSlash(rest)), nil
-}
-
-// isReserved reports whether the cleaned relative path touches the
-// reserved server-state namespace.
-func isReserved(rel string) bool {
-	if rel == "." {
-		return false
-	}
-	for seg := range strings.SplitSeq(rel, "/") {
-		if seg == reservedDir {
-			return true
-		}
-	}
-	return false
 }
 
 // withinRoot reports whether target is the root or below it.
@@ -178,7 +157,13 @@ func (s *Storage) Stat(_ context.Context, p string) (storage.FileInfo, error) {
 	if !fi.IsDir() {
 		head = readHead(target)
 	}
-	return s.info(rel, fi, head), nil
+	out := s.info(rel, fi, head)
+	// Check if the original path (before resolve) was a symlink.
+	lfi, lerr := os.Lstat(filepath.Join(s.root, filepath.FromSlash(rel)))
+	if lerr == nil && lfi.Mode()&os.ModeSymlink != 0 {
+		out.IsSymlink = true
+	}
+	return out, nil
 }
 
 // List returns the sorted contents of a directory.
@@ -205,12 +190,18 @@ func (s *Storage) List(ctx context.Context, p string, sort storage.SortOptions) 
 		if ctx.Err() != nil {
 			return storage.Listing{}, ctx.Err()
 		}
-		if rel == "." && e.Name() == reservedDir {
-			continue // hidden server-state namespace
-		}
 		efi, err := e.Info()
 		if err != nil {
 			continue // vanished between ReadDir and Info
+		}
+		// DirEntry.Info returns lstat data; follow symlinks so listings
+		// report the target's real size/mode/isDir.
+		if efi.Mode()&os.ModeSymlink != 0 {
+			resolved, serr := os.Stat(filepath.Join(target, e.Name()))
+			if serr != nil {
+				continue // dangling symlink
+			}
+			efi = resolved
 		}
 		childRel := e.Name()
 		if rel != "." {
@@ -218,8 +209,10 @@ func (s *Storage) List(ctx context.Context, p string, sort storage.SortOptions) 
 		}
 		// Extension-only detection keeps listings cheap; unknown extensions
 		// fall back to blob and get sniffed on individual Stat.
-		listing.Items = append(listing.Items, s.info(childRel, efi, nil))
-		if e.IsDir() {
+		item := s.info(childRel, efi, nil)
+		item.IsSymlink = e.Type()&os.ModeSymlink != 0
+		listing.Items = append(listing.Items, item)
+		if efi.IsDir() {
 			listing.NumDirs++
 		} else {
 			listing.NumFiles++
@@ -333,9 +326,6 @@ var defaultNoiseDirs = map[string]struct{}{
 }
 
 func shouldSkipDir(name, lowerTerm string, isSearch bool) bool {
-	if name == reservedDir {
-		return true
-	}
 	if !isSearch {
 		return false
 	}
@@ -463,7 +453,17 @@ func (s *Storage) scanTask(ctx context.Context, wc *walkContext, task dirTask, n
 			childRel = task.relPath + "/" + d.Name()
 		}
 
-		if d.IsDir() {
+		isDir := d.IsDir()
+		// Symlinks need a stat to determine whether they point to dirs.
+		if d.Type()&os.ModeSymlink != 0 {
+			if fi, err := os.Stat(filepath.Join(task.diskPath, d.Name())); err == nil {
+				isDir = fi.IsDir()
+			} else {
+				continue // dangling symlink
+			}
+		}
+
+		if isDir {
 			if !s.processDir(wc, task, d, childRel, nextQueue) {
 				return
 			}
@@ -663,7 +663,17 @@ func (s *Storage) Move(_ context.Context, from, to string) (storage.FileInfo, er
 		return storage.FileInfo{}, err
 	}
 	if err := os.Rename(fromTarget, toTarget); err != nil {
-		return storage.FileInfo{}, err
+		if !isCrossDevice(err) {
+			return storage.FileInfo{}, err
+		}
+		// Cross-device rename: copy then remove.
+		if err := copyTree(fromTarget, toTarget); err != nil {
+			_ = os.RemoveAll(toTarget) // clean up partial copy
+			return storage.FileInfo{}, err
+		}
+		if err := os.RemoveAll(fromTarget); err != nil {
+			return storage.FileInfo{}, err
+		}
 	}
 	fi, err := os.Stat(toTarget)
 	if err != nil {
@@ -759,4 +769,60 @@ func (u *upload) Commit() error {
 func (u *upload) Abort() error {
 	_ = u.f.Close()
 	return os.Remove(u.path)
+}
+
+// isCrossDevice reports whether err is an EXDEV (cross-device link) error.
+func isCrossDevice(err error) bool {
+	var linkErr *os.LinkError
+	if !errors.As(err, &linkErr) {
+		return false
+	}
+	return errors.Is(linkErr.Err, syscall.EXDEV)
+}
+
+// copyTree copies src to dst recursively, preserving modes.
+func copyTree(src, dst string) error {
+	fi, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	if fi.IsDir() {
+		return copyDir(src, dst, fi.Mode())
+	}
+	return copyFile(src, dst, fi.Mode())
+}
+
+func copyDir(src, dst string, mode os.FileMode) error {
+	if err := os.MkdirAll(dst, mode); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		s := filepath.Join(src, e.Name())
+		d := filepath.Join(dst, e.Name())
+		if err := copyTree(s, d); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyFile(src, dst string, mode os.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }

@@ -4,11 +4,8 @@ import (
 	"bytes"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/skidoodle/filebrowser/internal/storage"
 )
 
 func TestMove(t *testing.T) {
@@ -112,71 +109,6 @@ func TestWriteSizeCap(t *testing.T) {
 	defer rc.Close()
 	if fi.Size != 10 {
 		t.Fatalf("size = %d, want 10 (cap enforced)", fi.Size)
-	}
-}
-
-func TestReservedNamespaceInvisible(t *testing.T) {
-	t.Parallel()
-	s := newTestStorage(t)
-
-	resDir := filepath.Join(s.root, reservedDir)
-	if err := os.MkdirAll(resDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(resDir, "admin.json"), []byte("{}"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.CreateFile(t.Context(), "visible.txt"); err != nil {
-		t.Fatal(err)
-	}
-
-	// Not listable.
-	listing, err := s.List(t.Context(), ".", storage.SortOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, item := range listing.Items {
-		if item.Name == reservedDir {
-			t.Fatal("reserved dir appears in listing")
-		}
-	}
-
-	// Not statable/openable/removable/movable/writable through the port.
-	for name, fn := range map[string]func() error{
-		"stat":    func() error { _, err := s.Stat(t.Context(), reservedDir+"/admin.json"); return err },
-		"open":    func() error { _, _, err := s.Open(t.Context(), reservedDir+"/admin.json"); return err },
-		"remove":  func() error { return s.Remove(t.Context(), reservedDir) },
-		"moveTo":  func() error { _, err := s.Move(t.Context(), "visible.txt", reservedDir+"/x"); return err },
-		"moveFr":  func() error { _, err := s.Move(t.Context(), reservedDir+"/admin.json", "x"); return err },
-		"write":   func() error { _, err := s.Write(t.Context(), reservedDir+"/x", strings.NewReader("y"), 1); return err },
-		"create":  func() error { _, err := s.CreateFile(t.Context(), reservedDir+"/x"); return err },
-		"mkdir":   func() error { _, err := s.CreateDir(t.Context(), reservedDir+"/sub"); return err },
-		"upload":  func() error { _, err := s.StartUpload(t.Context(), reservedDir+"/x", 1); return err },
-		"subpath": func() error { _, err := s.Stat(t.Context(), "sub/"+reservedDir+"/x"); return err },
-	} {
-		if err := fn(); err == nil {
-			t.Errorf("reserved namespace operation %q succeeded", name)
-		}
-	}
-
-	// Not searchable.
-	found := false
-	err = s.Walk(t.Context(), ".", storage.SearchOptions{}, func(fi storage.FileInfo) error {
-		if strings.Contains(fi.Path, reservedDir) {
-			found = true
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if found {
-		t.Fatal("reserved namespace appears in walk")
-	}
-
-	// But still present on disk (durability).
-	if _, err := os.Stat(filepath.Join(resDir, "admin.json")); err != nil {
-		t.Fatalf("reserved file vanished: %v", err)
 	}
 }
 

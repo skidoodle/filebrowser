@@ -24,13 +24,7 @@ RUN CGO_ENABLED=0 go build -trimpath \
     -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
     -o /bin/filebrowser .
 
-FROM alpine:3.21 AS runtime
-RUN apk add --no-cache ca-certificates mailcap tzdata && \
-    mkdir -p /data /cache /app /db /tmp && \
-    chmod 1777 /tmp && \
-    chown -R 1000:1000 /data /cache /app /db
-
-FROM scratch
+FROM alpine:3.21
 
 ARG VERSION=dev
 ARG COMMIT=none
@@ -43,15 +37,13 @@ LABEL org.opencontainers.image.title="filebrowser" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${COMMIT}"
 
+RUN apk add --no-cache ca-certificates mailcap tzdata su-exec && \
+    mkdir -p /data /cache /app /db && \
+    chown -R 1000:1000 /data /cache /app /db
+
 COPY --from=backend /bin/filebrowser /usr/local/bin/filebrowser
-COPY --from=runtime /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=runtime /etc/mime.types /etc/mime.types
-COPY --from=runtime /usr/share/zoneinfo /usr/share/zoneinfo
-COPY --from=runtime --chown=1000:1000 /data /data
-COPY --from=runtime --chown=1000:1000 /cache /cache
-COPY --from=runtime --chown=1000:1000 /app /app
-COPY --from=runtime --chown=1000:1000 /db /db
-COPY --from=runtime --chmod=1777 /tmp /tmp
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENV FILEBROWSER_ROOT=/data \
     FILEBROWSER_CACHEDIR=/cache \
@@ -59,9 +51,8 @@ ENV FILEBROWSER_ROOT=/data \
 
 VOLUME ["/data", "/cache", "/db"]
 
-USER 1000:1000
 WORKDIR /app
 
 EXPOSE 8080
 
-ENTRYPOINT ["filebrowser"]
+ENTRYPOINT ["docker-entrypoint.sh"]

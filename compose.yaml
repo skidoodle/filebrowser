@@ -10,6 +10,9 @@ services:
       - ./cache:/cache
       - ./db:/db
     environment:
+      # User ID/GID the process runs as
+      - PUID=1000
+      - PGID=1000
       # Directory served inside the container (default: /data)
       - FILEBROWSER_ROOT=/data
       # Path to SQLite database file inside container (default: /db/filebrowser.db)

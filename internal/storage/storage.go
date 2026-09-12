@@ -30,6 +30,7 @@ type FileInfo struct {
 	ModTime   time.Time   `json:"modified"`
 	Mode      fs.FileMode `json:"-"`
 	IsDir     bool        `json:"isDir"`
+	IsSymlink bool        `json:"isSymlink,omitempty"`
 	Type      FileType    `json:"type"`
 	MimeType  string      `json:"mime,omitempty"`
 	Extension string      `json:"extension,omitempty"`

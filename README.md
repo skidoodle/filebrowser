@@ -9,21 +9,71 @@ data lives in a SQLite database; files stay on the plain filesystem.
 
 ## Quick start
 
-Build from source (requires Go 1.26+ and Bun):
+### Docker Compose (recommended)
+
+```yaml
+services:
+  filebrowser:
+    image: ghcr.io/skidoodle/filebrowser:latest
+    container_name: filebrowser
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+      - ./db:/db
+```
+
+```bash
+docker compose up -d
+```
+
+Then open http://localhost:8080. The first visit offers to create an admin
+account.
+
+### Custom UID/GID
+
+By default the container runs as `1000:1000`. If your host volumes are owned by
+a different user, set `PUID` and `PGID`:
+
+```yaml
+services:
+  filebrowser:
+    image: ghcr.io/skidoodle/filebrowser:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - PUID=1001
+      - PGID=1001
+    volumes:
+      - /mnt/nas/files:/data
+      - ./db:/db
+```
+
+The entrypoint automatically fixes ownership of `/data`, `/cache`, and `/db`
+before dropping privileges. This also works when bind-mounting multiple
+filesystems under `/data`:
+
+```yaml
+    volumes:
+      - /mnt/ssd/documents:/data/documents
+      - /mnt/hdd/media:/data/media
+      - ./db:/db
+```
+
+> [!NOTE]
+> If you use `user: "1001:1001"` in compose instead of `PUID`/`PGID`, the
+> entrypoint skips the ownership fix and execs directly. Make sure your volumes
+> are already writable by that UID.
+
+### Build from source
+
+Requires Go 1.26+ and Bun:
 
 ```bash
 just build
 FILEBROWSER_ROOT=./data ./bin/filebrowser
 ```
-
-Or run the Docker image:
-
-```bash
-docker run -p 8080:8080 -v "$PWD/data:/data" -v "$PWD/db:/db" ghcr.io/skidoodle/filebrowser:latest
-```
-
-Then open http://localhost:8080. The first visit offers to create an admin
-account.
 
 ## Configuration
 
@@ -31,6 +81,8 @@ All settings come from environment variables.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
+| `PUID` | `1000` | user ID the process runs as (Docker only) |
+| `PGID` | `1000` | group ID the process runs as (Docker only) |
 | `FILEBROWSER_ROOT` | `./data` | directory served to visitors |
 | `FILEBROWSER_DATABASE` | `./filebrowser.db` | path to SQLite database |
 | `FILEBROWSER_ADDRESS` | `0.0.0.0:8080` | listen address |
