@@ -289,11 +289,25 @@ func TestAdminWriteRequiresAuth(t *testing.T) {
 
 func TestInsecureModeGrantsEverything(t *testing.T) {
 	t.Parallel()
-	ts, _ := newAuthTestServer(t, "", "true")
+	ts, store, _ := newTestServerCfg(t, testServerConfig{Insecure: true})
+
+	if _, err := store.CreateFile(t.Context(), "hello.txt"); err != nil {
+		t.Fatal(err)
+	}
 
 	code, me := getJSON(t, ts.URL+"/api/me", nil)
 	if code != http.StatusOK || me["admin"] != true || me["insecure"] != true {
 		t.Fatalf("me = %+v", me)
+	}
+
+	// Listing works and returns items in insecure mode.
+	code, list := getJSON(t, ts.URL+"/api/list?path=.", nil)
+	if code != http.StatusOK {
+		t.Fatalf("insecure list = %d, want 200", code)
+	}
+	items, ok := list["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("insecure list items = %v, want 1 item", list["items"])
 	}
 
 	// Delete works without any cookie.

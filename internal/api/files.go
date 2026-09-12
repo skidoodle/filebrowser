@@ -65,17 +65,22 @@ func (s *Server) filterListing(r *http.Request, l storage.Listing) storage.Listi
 }
 
 // rebuildListing keeps only the listed paths and recounts the listing.
-// An empty kept list keeps everything.
+// A nil kept list keeps everything.
 func rebuildListing(l storage.Listing, kept []string, annotate func(storage.FileInfo) storage.FileInfo) storage.Listing {
-	keptSet := make(map[string]struct{}, len(kept))
-	for _, p := range kept {
-		keptSet[p] = struct{}{}
+	var keptSet map[string]struct{}
+	if kept != nil {
+		keptSet = make(map[string]struct{}, len(kept))
+		for _, p := range kept {
+			keptSet[p] = struct{}{}
+		}
 	}
 	items := l.Items[:0]
 	l.NumDirs, l.NumFiles = 0, 0
 	for _, item := range l.Items {
-		if _, ok := keptSet[item.Path]; !ok {
-			continue
+		if keptSet != nil {
+			if _, ok := keptSet[item.Path]; !ok {
+				continue
+			}
 		}
 		item = annotate(item)
 		if item.IsDir {
