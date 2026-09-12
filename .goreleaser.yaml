@@ -54,6 +54,8 @@ changelog:
 dockers_v2:
   - id: filebrowser
     dockerfile: Dockerfile.release
+    extra_files:
+      - docker-entrypoint.sh
     images:
       - ghcr.io/skidoodle/filebrowser
     tags:
