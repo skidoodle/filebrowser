@@ -304,6 +304,7 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
           enabled={canWriteHere}
           items={items}
           selection={selected}
+          viewMode={prefs.viewMode}
           onMoved={() => {
             void queryClient.invalidateQueries({ queryKey: ["list"] });
             void queryClient.invalidateQueries({ queryKey: ["usage"] });

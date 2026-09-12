@@ -15,6 +15,7 @@ import { withBasePath } from "../lib/base";
 import { joinPath } from "../lib/path";
 import { formatBytes, formatRelative } from "../lib/format";
 import { FileTypeIcon } from "../lib/icons";
+import { usePrefs, type ViewMode } from "../stores/prefs";
 import type { FileInfo } from "../types";
 
 export interface DragProps {
@@ -62,6 +63,7 @@ interface AdminDndProps {
   items: FileInfo[];
   selection: ReadonlySet<string>;
   onMoved: () => void;
+  viewMode?: ViewMode;
   children: ReactNode;
 }
 
@@ -85,7 +87,9 @@ class LeftClickMouseSensor extends MouseSensor {
   ];
 }
 
-export function AdminDnd({ enabled, items, selection, onMoved, children }: AdminDndProps) {
+export function AdminDnd({ enabled, items, selection, onMoved, viewMode, children }: AdminDndProps) {
+  const currentViewMode = usePrefs((s) => s.viewMode);
+  const activeViewMode = viewMode ?? currentViewMode;
   const [source, setSource] = useState<DragPayload | null>(null);
   const sensors = useSensors(
     useSensor(LeftClickMouseSensor, { activationConstraint: { distance: 8 } }),
@@ -139,25 +143,42 @@ export function AdminDnd({ enabled, items, selection, onMoved, children }: Admin
       <DragOverlay dropAnimation={{ duration: 250, easing: "cubic-bezier(0.25, 1, 0.5, 1)" }}>
         {sourceInfo && (
           <div className="pointer-events-none animate-[dragLift_150ms_ease-out]">
-            <div className="bg-kumo-base ring-kumo-hairline relative flex items-start gap-3 rounded-xl p-4 shadow-xl ring-1">
-              <FileTypeIcon type={sourceInfo.type} size={40} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold leading-6">
+            {activeViewMode === "list" ? (
+              <div className="bg-kumo-base ring-kumo-hairline relative flex min-w-56 max-w-sm items-center gap-2.5 rounded-lg px-3 py-2 shadow-xl ring-1">
+                <FileTypeIcon type={sourceInfo.type} size={22} />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
                   {sourceInfo.name}
-                </p>
-                <p className="text-kumo-subtle mt-0.5 text-sm">
-                  {sourceInfo.isDir ? "—" : formatBytes(sourceInfo.size)}
-                </p>
-                <p className="text-kumo-subtle mt-0.5 text-sm">
-                  {formatRelative(sourceInfo.modified)}
-                </p>
-              </div>
-              {extraCount > 0 && (
-                <span className="bg-kumo-info text-white absolute -top-2 -right-2 flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-bold shadow">
-                  +{extraCount}
                 </span>
-              )}
-            </div>
+                <span className="text-kumo-subtle shrink-0 text-xs">
+                  {sourceInfo.isDir ? "—" : formatBytes(sourceInfo.size)}
+                </span>
+                {extraCount > 0 && (
+                  <span className="bg-kumo-info text-white absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold shadow">
+                    +{extraCount}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="bg-kumo-base ring-kumo-hairline relative flex w-64 items-start gap-3 rounded-xl p-4 shadow-xl ring-1">
+                <FileTypeIcon type={sourceInfo.type} size={40} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold leading-6">
+                    {sourceInfo.name}
+                  </p>
+                  <p className="text-kumo-subtle mt-0.5 text-sm">
+                    {sourceInfo.isDir ? "—" : formatBytes(sourceInfo.size)}
+                  </p>
+                  <p className="text-kumo-subtle mt-0.5 text-sm">
+                    {formatRelative(sourceInfo.modified)}
+                  </p>
+                </div>
+                {extraCount > 0 && (
+                  <span className="bg-kumo-info text-white absolute -top-2 -right-2 flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-bold shadow">
+                    +{extraCount}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
       </DragOverlay>
