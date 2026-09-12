@@ -25,6 +25,14 @@ func toUserJSON(u store.User) userJSON {
 
 // handleListUsers returns all accounts. Admin-only.
 func (s *Server) handleListUsers(w http.ResponseWriter, _ *http.Request) {
+	if s.cfg.Insecure {
+		apiError(w, http.StatusBadRequest, "auth disabled in insecure mode")
+		return
+	}
+	if s.auth == nil {
+		apiError(w, http.StatusInternalServerError, "auth unavailable")
+		return
+	}
 	users, err := s.auth.ListUsers()
 	if err != nil {
 		respondErr(w, err)
@@ -40,6 +48,14 @@ func (s *Server) handleListUsers(w http.ResponseWriter, _ *http.Request) {
 // handleCreateUser creates an account. Admin-only.
 // Body: {"username", "password", "admin", "scope"}.
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Insecure {
+		apiError(w, http.StatusBadRequest, "auth disabled in insecure mode")
+		return
+	}
+	if s.auth == nil {
+		apiError(w, http.StatusInternalServerError, "auth unavailable")
+		return
+	}
 	var body struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -61,6 +77,14 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 // handleUpdateUser changes an account's admin flag, scope or password
 // (admin reset). Admin-only.
 func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Insecure {
+		apiError(w, http.StatusBadRequest, "auth disabled in insecure mode")
+		return
+	}
+	if s.auth == nil {
+		apiError(w, http.StatusInternalServerError, "auth unavailable")
+		return
+	}
 	id, ok := pathID(w, r)
 	if !ok {
 		return
@@ -126,6 +150,14 @@ func (s *Server) patchUserAttributes(w http.ResponseWriter, id int64, admin *boo
 // handleDeleteUser removes an account (original admin and last-admin
 // guardrails apply). Admin-only.
 func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Insecure {
+		apiError(w, http.StatusBadRequest, "auth disabled in insecure mode")
+		return
+	}
+	if s.auth == nil {
+		apiError(w, http.StatusInternalServerError, "auth unavailable")
+		return
+	}
 	id, ok := pathID(w, r)
 	if !ok {
 		return
@@ -166,6 +198,14 @@ func (s *Server) writeUserErr(w http.ResponseWriter, err error) {
 // and survive); password changes require the current password.
 // Body: {"username"?, "current", "password"}.
 func (s *Server) handleAuthPassword(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Insecure {
+		apiError(w, http.StatusBadRequest, "auth disabled in insecure mode")
+		return
+	}
+	if s.auth == nil {
+		apiError(w, http.StatusInternalServerError, "auth unavailable")
+		return
+	}
 	id := requestIdentity(r).UserID
 	if id == 0 {
 		apiError(w, http.StatusUnauthorized, "authentication required")

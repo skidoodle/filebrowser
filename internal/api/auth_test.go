@@ -316,6 +316,15 @@ func TestInsecureModeGrantsEverything(t *testing.T) {
 	if res.StatusCode != http.StatusNotFound {
 		t.Fatalf("insecure delete = %d, want 404 (missing path)", res.StatusCode)
 	}
+
+	// User management is disabled in insecure mode and returns 400 instead of 500 panic.
+	code, usersBody := getJSON(t, ts.URL+"/api/users", nil)
+	if code != http.StatusBadRequest {
+		t.Fatalf("insecure users = %d, want 400", code)
+	}
+	if usersBody["error"] != "auth disabled in insecure mode" {
+		t.Fatalf("insecure users error = %v, want 'auth disabled in insecure mode'", usersBody["error"])
+	}
 }
 
 func TestCSRFRejected(t *testing.T) {

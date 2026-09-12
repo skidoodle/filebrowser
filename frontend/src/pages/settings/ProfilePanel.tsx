@@ -49,7 +49,13 @@ export function ProfilePanel() {
     }
   };
 
-  const role = me.data?.admin ? "Administrator" : me.data?.scope ? `Scoped to /${me.data.scope}` : "Full access";
+  const role = me.data?.insecure
+    ? "Insecure mode"
+    : me.data?.admin
+      ? "Administrator"
+      : me.data?.scope
+        ? `Scope: /${me.data.scope}`
+        : "Full access";
 
   return (
     <div className="flex flex-col gap-4">
@@ -81,70 +87,80 @@ export function ProfilePanel() {
         )}
       </div>
 
-      <form
-        className="bg-kumo-base ring-kumo-hairline rounded-xl p-5 ring-1"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (usernameValid && usernameChanged && !rename.isPending) {
-            setDone(null);
-            rename.mutate();
-          }
-        }}
-      >
-        <h2 className="mb-1 text-base font-semibold">Username</h2>
-        <p className="text-kumo-subtle mb-4 text-sm">
-          Your sign-in name. Sessions stay signed in; the old name stops working immediately.
-        </p>
-        <div className="flex max-w-sm items-start gap-2">
-          <Input
-            type="text"
-            autoComplete="username"
-            placeholder="New username (letters, digits, . _ -)"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
-          <Button type="submit" variant="secondary" loading={rename.isPending} disabled={!usernameChanged || !usernameValid} className="shrink-0">
-            Rename
-          </Button>
+      {me.data?.insecure ? (
+        <div className="bg-kumo-base ring-kumo-hairline rounded-xl p-5 ring-1">
+          <p className="text-kumo-subtle text-sm">
+            Authentication is disabled in insecure mode. Profile and credential settings are not available.
+          </p>
         </div>
-        {rename.error instanceof Error && <p className="text-kumo-danger mt-2 text-sm">{rename.error.message}</p>}
-      </form>
-
-      <form onSubmit={onSubmit} className="bg-kumo-base ring-kumo-hairline rounded-xl p-5 ring-1">
-        <h2 className="mb-1 text-base font-semibold">Change password</h2>
-        <p className="text-kumo-subtle mb-4 text-sm">Choose a password of at least 8 characters.</p>
-        <div className="flex max-w-sm flex-col gap-3">
-          <Input type="password"
-            autoComplete="current-password"
-            placeholder="Current password"
-            value={current}
-            onValueChange={setCurrent}
-          />
-          <Input type="password"
-            autoComplete="new-password"
-            placeholder="New password"
-            value={password}
-            onValueChange={setPassword}
-          />
-          <Input type="password"
-            autoComplete="new-password"
-            placeholder="Repeat new password"
-            value={confirm}
-            onValueChange={setConfirm}
-          />
-          {mismatch && <p className="text-kumo-danger text-sm">Passwords do not match.</p>}
-          {tooShort && <p className="text-kumo-danger text-sm">Password must be at least 8 characters.</p>}
-          {change.error instanceof Error && <p className="text-kumo-danger text-sm">{change.error.message}</p>}
-          {done && (
-            <p className="text-kumo-success flex items-center gap-1.5 text-sm">
-              <CheckIcon size={16} weight="bold" /> {done}
+      ) : (
+        <>
+          <form
+            className="bg-kumo-base ring-kumo-hairline rounded-xl p-5 ring-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (usernameValid && usernameChanged && !rename.isPending) {
+                setDone(null);
+                rename.mutate();
+              }
+            }}
+          >
+            <h2 className="mb-1 text-base font-semibold">Username</h2>
+            <p className="text-kumo-subtle mb-4 text-sm">
+              Your sign-in name. Sessions stay signed in; the old name stops working immediately.
             </p>
-          )}
-          <Button type="submit" variant="primary" loading={change.isPending} disabled={disabled} className="mt-1 self-start">
-            Update password
-          </Button>
-        </div>
-      </form>
+            <div className="flex max-w-sm items-start gap-2">
+              <Input
+                type="text"
+                autoComplete="username"
+                placeholder="New username (letters, digits, . _ -)"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+              <Button type="submit" variant="secondary" loading={rename.isPending} disabled={!usernameChanged || !usernameValid} className="shrink-0">
+                Rename
+              </Button>
+            </div>
+            {rename.error instanceof Error && <p className="text-kumo-danger mt-2 text-sm">{rename.error.message}</p>}
+          </form>
+
+          <form onSubmit={onSubmit} className="bg-kumo-base ring-kumo-hairline rounded-xl p-5 ring-1">
+            <h2 className="mb-1 text-base font-semibold">Change password</h2>
+            <p className="text-kumo-subtle mb-4 text-sm">Choose a password of at least 8 characters.</p>
+            <div className="flex max-w-sm flex-col gap-3">
+              <Input type="password"
+                autoComplete="current-password"
+                placeholder="Current password"
+                value={current}
+                onValueChange={setCurrent}
+              />
+              <Input type="password"
+                autoComplete="new-password"
+                placeholder="New password"
+                value={password}
+                onValueChange={setPassword}
+              />
+              <Input type="password"
+                autoComplete="new-password"
+                placeholder="Repeat new password"
+                value={confirm}
+                onValueChange={setConfirm}
+              />
+              {mismatch && <p className="text-kumo-danger text-sm">Passwords do not match.</p>}
+              {tooShort && <p className="text-kumo-danger text-sm">Password must be at least 8 characters.</p>}
+              {change.error instanceof Error && <p className="text-kumo-danger text-sm">{change.error.message}</p>}
+              {done && (
+                <p className="text-kumo-success flex items-center gap-1.5 text-sm">
+                  <CheckIcon size={16} weight="bold" /> {done}
+                </p>
+              )}
+              <Button type="submit" variant="primary" loading={change.isPending} disabled={disabled} className="mt-1 self-start">
+                Update password
+              </Button>
+            </div>
+          </form>
+        </>
+      )}
     </div>
   );
 }

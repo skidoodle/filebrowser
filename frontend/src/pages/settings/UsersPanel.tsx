@@ -3,15 +3,22 @@ import { LockKeyIcon, PencilSimpleIcon, PlusIcon, TrashSimpleIcon, UserCircleIco
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { users, type User } from "../../api/auth";
+import { useMe } from "../../lib/useMe";
 
 type FormTarget = "new" | User | null;
 
 export function UsersPanel() {
+  const me = useMe();
   const queryClient = useQueryClient();
   const [formTarget, setFormTarget] = useState<FormTarget>(null);
   const [deleting, setDeleting] = useState<User | null>(null);
 
-  const list = useQuery({ queryKey: ["users"], queryFn: users.list });
+  const isInsecure = me.data?.insecure === true;
+  const list = useQuery({
+    queryKey: ["users"],
+    queryFn: users.list,
+    enabled: !isInsecure,
+  });
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["users"] });
 
@@ -22,6 +29,22 @@ export function UsersPanel() {
       invalidate();
     },
   });
+
+  if (isInsecure) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h2 className="text-base font-semibold">Users</h2>
+          <p className="text-kumo-subtle text-sm">Accounts on this server</p>
+        </div>
+        <div className="bg-kumo-base ring-kumo-hairline rounded-xl p-5 ring-1">
+          <p className="text-kumo-subtle text-sm">
+            User management is disabled because filebrowser is running in insecure mode. All visitors have full administrative access.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
