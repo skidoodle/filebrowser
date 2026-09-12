@@ -325,6 +325,11 @@ func TestInsecureModeGrantsEverything(t *testing.T) {
 	if usersBody["error"] != "auth disabled in insecure mode" {
 		t.Fatalf("insecure users error = %v, want 'auth disabled in insecure mode'", usersBody["error"])
 	}
+
+	// Access policy modification is disabled in insecure mode.
+	if code := setAccessPolicy(t, ts, "readonly", ""); code != http.StatusBadRequest {
+		t.Fatalf("insecure set access policy = %d, want 400", code)
+	}
 }
 
 func TestCSRFRejected(t *testing.T) {

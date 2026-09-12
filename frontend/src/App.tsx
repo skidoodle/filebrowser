@@ -79,12 +79,15 @@ export default function App() {
   }
 
   // Admin-only settings tabs fallback to profile for regular accounts.
+  // In insecure mode, user accounts and access policy are disabled; fallback to profile.
   const effectiveTab =
     (settingsTab === "users" || settingsTab === "policy" || settingsTab === "system" || settingsTab === "about") &&
       me.data &&
       !me.data.admin
       ? "profile"
-      : settingsTab;
+      : (settingsTab === "users" || settingsTab === "policy") && me.data?.insecure
+        ? "profile"
+        : settingsTab;
 
   return (
     <div className="flex h-full overflow-hidden">

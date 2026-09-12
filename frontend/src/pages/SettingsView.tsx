@@ -33,10 +33,10 @@ export function SettingsView({ tab, onTabChange, onClose, onOpenMobileMenu }: Se
   const admin = me.data?.admin === true;
   const tabListRef = useRef<HTMLElement>(null);
 
-  const tabs: { id: SettingsTab; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
+  const tabs: { id: SettingsTab; label: string; icon: React.ReactNode; adminOnly?: boolean; hideInsecure?: boolean }[] = [
     { id: "profile", label: "Profile", icon: <KeyIcon size={16} /> },
-    { id: "users", label: "Users", icon: <ShieldCheckIcon size={16} />, adminOnly: true },
-    { id: "policy", label: "Access Policy", icon: <LockKeyIcon size={16} />, adminOnly: true },
+    { id: "users", label: "Users", icon: <ShieldCheckIcon size={16} />, adminOnly: true, hideInsecure: true },
+    { id: "policy", label: "Access Policy", icon: <LockKeyIcon size={16} />, adminOnly: true, hideInsecure: true },
     { id: "system", label: "System", icon: <SlidersHorizontalIcon size={16} />, adminOnly: true },
     { id: "about", label: "About", icon: <InfoIcon size={16} />, adminOnly: true },
   ];
@@ -78,7 +78,7 @@ export function SettingsView({ tab, onTabChange, onClose, onOpenMobileMenu }: Se
             className="scrollbar-none -mb-px flex gap-1 overflow-x-auto overflow-y-hidden px-4 touch-pan-x sm:px-0"
           >
             {tabs
-              .filter((t) => !t.adminOnly || admin)
+              .filter((t) => (!t.adminOnly || admin) && (!t.hideInsecure || !me.data?.insecure))
               .map((t) => (
                 <button
                   key={t.id}

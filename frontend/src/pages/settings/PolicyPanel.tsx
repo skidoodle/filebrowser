@@ -49,6 +49,19 @@ export function PolicyPanel() {
 
   const changed = selected !== currentPolicy;
 
+  if (me.data?.insecure) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="bg-kumo-base ring-kumo-hairline flex flex-col gap-1 rounded-xl p-5 ring-1">
+          <h2 className="text-base font-semibold">Access Policy</h2>
+          <p className="text-kumo-subtle text-sm">
+            Access policy is inactive because filebrowser is running in insecure mode. All visitors have full write access without authentication.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="bg-kumo-base ring-kumo-hairline flex flex-col gap-1 rounded-xl p-5 ring-1">

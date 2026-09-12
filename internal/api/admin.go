@@ -177,6 +177,10 @@ func (s *Server) handleGetPolicy(w http.ResponseWriter, _ *http.Request) {
 // handleSetPolicy updates the active access policy. Admin-only.
 // Body: {"access_policy": "public" | "readonly" | "private"}.
 func (s *Server) handleSetPolicy(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Insecure {
+		apiError(w, http.StatusBadRequest, "access policy cannot be modified in insecure mode")
+		return
+	}
 	if s.appStore == nil {
 		apiError(w, http.StatusInternalServerError, "store unavailable")
 		return
