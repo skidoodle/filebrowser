@@ -1,4 +1,4 @@
-import { CheckIcon } from "@phosphor-icons/react";
+import { CheckIcon, DotsThreeVerticalIcon } from "@phosphor-icons/react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useFolderDrop, useItemDrag } from "./dnd";
 import { useMe } from "../lib/useMe";
@@ -6,6 +6,7 @@ import { canWriteIn, canWritePath } from "../lib/permissions";
 import { formatBytes, formatRelative } from "../lib/format";
 import { FileTypeIcon } from "../lib/icons";
 import { mergeRefs } from "../lib/refs";
+import { useLongPress } from "../lib/useLongPress";
 import type { FileInfo } from "../types";
 
 interface FileCardProps {
@@ -21,6 +22,11 @@ export function FileCard({ file, selected, onSelect, onOpen, onMenu }: FileCardP
   const canWrite = canWritePath(me, file.path);
   const drag = useItemDrag(file, canWrite);
   const drop = useFolderDrop({ path: file.path, isDir: file.isDir }, canWriteIn(me, file.path));
+  const longPress = useLongPress({
+    onLongPress: (coords) => {
+      onMenu(file, coords as unknown as ReactMouseEvent<HTMLElement>);
+    },
+  });
 
   return (
     <div
@@ -28,6 +34,7 @@ export function FileCard({ file, selected, onSelect, onOpen, onMenu }: FileCardP
       tabIndex={0}
       ref={mergeRefs(drag.ref, drop.ref)}
       {...drag.handleProps}
+      {...longPress.handlers}
       data-file-item
       data-path={file.path}
       onClick={(e) => onSelect(file, e.ctrlKey || e.metaKey || e.shiftKey)}
@@ -53,6 +60,24 @@ export function FileCard({ file, selected, onSelect, onOpen, onMenu }: FileCardP
         </p>
         <p className="text-kumo-subtle mt-0.5 text-sm">{formatRelative(file.modified)}</p>
       </div>
+      <button
+        type="button"
+        aria-label={`Actions for ${file.name}`}
+        title="Actions"
+        onClick={(e) => {
+          e.stopPropagation();
+          const rect = e.currentTarget.getBoundingClientRect();
+          onMenu(file, {
+            clientX: rect.left,
+            clientY: rect.bottom + 4,
+            preventDefault: () => {},
+            stopPropagation: () => {},
+          } as unknown as ReactMouseEvent<HTMLElement>);
+        }}
+        className="text-kumo-subtle hover:text-kumo-default hover:bg-kumo-tint -mr-1.5 -mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg cursor-pointer md:hidden"
+      >
+        <DotsThreeVerticalIcon size={18} weight="bold" />
+      </button>
       {selected && (
         <span className="bg-kumo-info ring-kumo-base absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full ring-2">
           <CheckIcon weight="bold" size={12} className="text-white" />

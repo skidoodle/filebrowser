@@ -192,9 +192,12 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
     void navigator.clipboard.writeText(url);
   };
 
-  const itemContextMenu = (file: FileInfo, e: ReactMouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const itemContextMenu = (
+    file: FileInfo,
+    e: ReactMouseEvent | { clientX: number; clientY: number; preventDefault?: () => void; stopPropagation?: () => void },
+  ) => {
+    e.preventDefault?.();
+    e.stopPropagation?.();
     if (!selected.has(file.path)) {
       selection.selectAll([file.path]);
     }

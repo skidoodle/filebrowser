@@ -1,3 +1,4 @@
+import { DotsThreeVerticalIcon } from "@phosphor-icons/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useRef, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import { useFolderDrop, useItemDrag } from "./dnd";
@@ -6,27 +7,34 @@ import { canWriteIn, canWritePath } from "../lib/permissions";
 import { formatBytes, formatRelative } from "../lib/format";
 import { FileTypeIcon } from "../lib/icons";
 import { mergeRefs } from "../lib/refs";
+import { useLongPress } from "../lib/useLongPress";
 import type { FileInfo } from "../types";
 
-interface FileTableProps {
+export interface FileTableProps {
   items: FileInfo[];
   selected: Set<string>;
   onSelect: (file: FileInfo, additive: boolean) => void;
   onOpen: (file: FileInfo) => void;
   onMenu: (file: FileInfo, e: ReactMouseEvent<HTMLElement>) => void;
-  scrollRef?: RefObject<HTMLDivElement | null>;
+  scrollRef: RefObject<HTMLDivElement | null>;
 }
 
-export function FileTable({ items, selected, onSelect, onOpen, onMenu, scrollRef }: FileTableProps) {
-  "use no memo";
+export function FileTable({
+  items,
+  selected,
+  onSelect,
+  onOpen,
+  onMenu,
+  scrollRef,
+}: FileTableProps) {
   const tableRef = useRef<HTMLTableElement>(null);
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
     count: items.length,
-    getScrollElement: () => scrollRef?.current ?? (tableRef.current?.closest("main") as HTMLDivElement | null),
+    getScrollElement: () => scrollRef.current,
     estimateSize: () => 49,
-    overscan: 12,
+    overscan: 10,
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
@@ -43,12 +51,13 @@ export function FileTable({ items, selected, onSelect, onOpen, onMenu, scrollRef
           <th className="px-2 py-2.5 font-medium sm:px-3">Name</th>
           <th className="w-20 px-2 py-2.5 font-medium sm:w-28 sm:px-3">Size</th>
           <th className="hidden w-40 px-3 py-2.5 font-medium sm:table-cell">Modified</th>
+          <th className="w-10 px-1 py-2.5 sm:w-12 md:hidden"><span className="sr-only">Actions</span></th>
         </tr>
       </thead>
       <tbody>
         {paddingTop > 0 && (
           <tr aria-hidden="true">
-            <td colSpan={3} style={{ height: `${paddingTop}px` }} />
+            <td colSpan={4} style={{ height: `${paddingTop}px` }} />
           </tr>
         )}
         {virtualItems.map((virtualRow) => {
@@ -67,7 +76,7 @@ export function FileTable({ items, selected, onSelect, onOpen, onMenu, scrollRef
         })}
         {paddingBottom > 0 && (
           <tr aria-hidden="true">
-            <td colSpan={3} style={{ height: `${paddingBottom}px` }} />
+            <td colSpan={4} style={{ height: `${paddingBottom}px` }} />
           </tr>
         )}
       </tbody>
@@ -88,11 +97,17 @@ function FileRow({ file, isSelected, onSelect, onOpen, onMenu }: FileRowProps) {
   const canWrite = canWritePath(me, file.path);
   const drag = useItemDrag(file, canWrite);
   const drop = useFolderDrop({ path: file.path, isDir: file.isDir }, canWriteIn(me, file.path));
+  const longPress = useLongPress({
+    onLongPress: (coords) => {
+      onMenu(file, coords as unknown as ReactMouseEvent<HTMLElement>);
+    },
+  });
 
   return (
     <tr
       ref={mergeRefs(drag.ref, drop.ref)}
       {...drag.handleProps}
+      {...longPress.handlers}
       data-file-item
       data-path={file.path}
       onClick={(e) => onSelect(file, e.ctrlKey || e.metaKey || e.shiftKey)}
@@ -119,6 +134,26 @@ function FileRow({ file, isSelected, onSelect, onOpen, onMenu }: FileRowProps) {
       </td>
       <td className="text-kumo-subtle hidden truncate px-3 py-3 leading-6 sm:table-cell">
         {formatRelative(file.modified)}
+      </td>
+      <td className="w-10 px-1 py-3 text-right sm:w-12 md:hidden" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          aria-label={`Actions for ${file.name}`}
+          title="Actions"
+          onClick={(e) => {
+            e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            onMenu(file, {
+              clientX: rect.left,
+              clientY: rect.bottom + 4,
+              preventDefault: () => {},
+              stopPropagation: () => {},
+            } as unknown as ReactMouseEvent<HTMLElement>);
+          }}
+          className="text-kumo-subtle hover:text-kumo-default hover:bg-kumo-tint inline-flex h-8 w-8 items-center justify-center rounded-lg cursor-pointer"
+        >
+          <DotsThreeVerticalIcon size={18} weight="bold" />
+        </button>
       </td>
     </tr>
   );

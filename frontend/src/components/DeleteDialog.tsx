@@ -15,7 +15,7 @@ export function DeleteDialog({ paths, loading, onClose, onConfirm }: DeleteDialo
         if (!open) onClose();
       }}
     >
-      <Dialog className="p-6">
+      <Dialog className="p-6 top-20 sm:top-24 z-50">
         <Dialog.Title>Delete</Dialog.Title>
         <Dialog.Description>
           {paths !== null && paths.length > 1
