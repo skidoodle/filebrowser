@@ -8,7 +8,7 @@ const meta =
   typeof document === "undefined"
     ? null
     : document.querySelector<HTMLMetaElement>('meta[name="filebrowser-base"]');
-export const basePath = normalizeBasePath(meta?.content ?? "");
+const basePath = normalizeBasePath(meta?.content ?? "");
 
 /** Prefixes an absolute application path with a normalized mount path. */
 export function addBasePath(base: string, pathname: string): string {

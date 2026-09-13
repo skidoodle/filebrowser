@@ -6,7 +6,7 @@ import { isReservedPath } from "../lib/routes";
 import { joinPath } from "../lib/path";
 import { setEditToken } from "../lib/tokens";
 
-export type NewItemKind = "dir" | "file" | null;
+type NewItemKind = "dir" | "file" | null;
 
 interface NewItemDialogProps {
   kind: NewItemKind;

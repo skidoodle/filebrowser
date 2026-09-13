@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { withBasePath } from "../lib/base";
 
-export const SystemDynamicSettingsSchema = z.object({
+const SystemDynamicSettingsSchema = z.object({
   max_upload: z.number(),
   max_text_size: z.number(),
   guard: z.boolean(),
@@ -12,7 +12,7 @@ export const SystemDynamicSettingsSchema = z.object({
 });
 export type SystemDynamicSettings = z.infer<typeof SystemDynamicSettingsSchema>;
 
-export const SystemInfoSchema = z.object({
+const SystemInfoSchema = z.object({
   root: z.string(),
   database: z.string(),
   cache_dir: z.string(),
@@ -25,9 +25,8 @@ export const SystemInfoSchema = z.object({
   go_version: z.string(),
   uptime_seconds: z.number(),
 });
-export type SystemInfo = z.infer<typeof SystemInfoSchema>;
 
-export const SystemSettingsResponseSchema = z.object({
+const SystemSettingsResponseSchema = z.object({
   dynamic: SystemDynamicSettingsSchema,
   info: SystemInfoSchema,
 });

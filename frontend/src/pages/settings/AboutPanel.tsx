@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { system } from "../../api/system";
 import { formatUptime } from "../../lib/format";
 
-export function DynamicUptimeBadge({ initialSeconds }: { initialSeconds: number }) {
+function DynamicUptimeBadge({ initialSeconds }: { initialSeconds: number }) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {

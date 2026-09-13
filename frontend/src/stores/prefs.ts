@@ -4,23 +4,23 @@ import { persist } from "zustand/middleware";
 import { z } from "zod";
 import type { SortBy, SortOrder } from "../api/client";
 
-export const ViewModeSchema = z.enum(["list", "mosaic", "gallery"]);
+const ViewModeSchema = z.enum(["list", "mosaic", "gallery"]);
 export type ViewMode = z.infer<typeof ViewModeSchema>;
 
-export const ThemeSchema = z.enum(["system", "dark", "light"]);
+const ThemeSchema = z.enum(["system", "dark", "light"]);
 export type Theme = z.infer<typeof ThemeSchema>;
 
 const SortBySchema = z.enum(["name", "size", "modified"]);
 const SortOrderSchema = z.enum(["asc", "desc"]);
 
-export const PrefsDataSchema = z.object({
+const PrefsDataSchema = z.object({
   viewMode: ViewModeSchema.catch("mosaic"),
   sortBy: SortBySchema.catch("name"),
   sortOrder: SortOrderSchema.catch("asc"),
   theme: ThemeSchema.catch("system"),
   infoPanel: z.boolean().catch(false),
 });
-export type PrefsData = z.infer<typeof PrefsDataSchema>;
+type PrefsData = z.infer<typeof PrefsDataSchema>;
 
 interface PrefsState extends PrefsData {
   setViewMode: (v: ViewMode) => void;
@@ -76,7 +76,7 @@ export function useEffectiveTheme(): "dark" | "light" {
   return systemDark ? "dark" : "light";
 }
 
-export function applyTheme(theme?: Theme) {
+function applyTheme(theme?: Theme) {
   if (typeof window === "undefined") return;
   const current = theme ?? usePrefs.getState().theme;
   const dark =

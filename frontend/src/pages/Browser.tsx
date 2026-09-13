@@ -15,7 +15,7 @@ import {
   UploadSimpleIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from "react";
-import { api } from "../api/client";
+import { api, type SortBy, type SortOrder } from "../api/client";
 import { auth } from "../api/auth";
 import { canWriteIn, canWritePath } from "../lib/permissions";
 import { ContextMenu, type ContextMenuState, type MenuEntry } from "../components/ContextMenu";
@@ -44,8 +44,8 @@ function useBrowserMutations({
   onDeleteSuccess,
 }: {
   dir: string;
-  sortBy: any;
-  sortOrder: any;
+  sortBy: SortBy;
+  sortOrder: SortOrder;
   onDeleteSuccess: () => void;
 }) {
   const queryClient = useQueryClient();

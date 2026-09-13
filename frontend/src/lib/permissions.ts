@@ -4,7 +4,7 @@ import type { Me } from "../api/auth";
  * Reports whether path lies at or below the user's scope prefix.
  * An empty scope means the whole root.
  */
-export function inScope(scope: string | undefined, path: string): boolean {
+function inScope(scope: string | undefined, path: string): boolean {
   if (!scope) return true;
   const rel = path === "." || path === "" ? "." : path;
   return rel === scope || rel.startsWith(scope + "/");

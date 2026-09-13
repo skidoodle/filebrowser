@@ -30,7 +30,7 @@ export function tusErrorText(err: Error): string {
     .split(", originated from request")[0];
 }
 
-export const UPLOAD_CHUNK_SIZE = 16 * 1024 * 1024;
+const UPLOAD_CHUNK_SIZE = 16 * 1024 * 1024;
 
 export interface UploadCallbacks {
   onProgress?: (uploaded: number, total: number) => void;

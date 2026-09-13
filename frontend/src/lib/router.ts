@@ -2,8 +2,7 @@ import { useSyncExternalStore } from "react";
 import { withBasePath, withoutBasePath } from "./base";
 import { matchRoute, parseRoute, routePath as canonicalRoutePath, type AppRoute } from "./routes";
 
-export { parseRoute } from "./routes";
-export type { AppRoute, CreateKind, SettingsTab } from "./routes";
+export type { AppRoute, SettingsTab } from "./routes";
 
 import { z } from "zod";
 

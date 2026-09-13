@@ -12,7 +12,6 @@ import {
 } from "../types";
 
 export type { AccessPolicy, Me, NewUser, User };
-export { AccessPolicySchema, MeSchema, NewUserSchema, UserSchema };
 
 async function jsonError(res: Response): Promise<string> {
   try {

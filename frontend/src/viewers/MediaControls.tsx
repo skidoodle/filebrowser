@@ -56,7 +56,7 @@ export function MediaTime({ current, total, className = "" }: { current: number;
   );
 }
 
-export function VolumeIcon({ volume, muted }: { volume: number; muted: boolean }) {
+function VolumeIcon({ volume, muted }: { volume: number; muted: boolean }) {
   if (muted || volume === 0) return <SpeakerXIcon size={18} weight="fill" />;
   if (volume < 0.5) return <SpeakerLowIcon size={18} weight="fill" />;
   return <SpeakerHighIcon size={18} weight="fill" />;

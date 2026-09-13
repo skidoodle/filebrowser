@@ -29,7 +29,7 @@ export function SystemPanel() {
   return <SystemSettingsForm initial={data.dynamic} />;
 }
 
-export function SystemSettingsForm({ initial }: { initial: SystemDynamicSettings }) {
+function SystemSettingsForm({ initial }: { initial: SystemDynamicSettings }) {
   const queryClient = useQueryClient();
   const [guard, setGuard] = useState(initial.guard);
   const [maxUpload, setMaxUpload] = useState(() => formatBytes(initial.max_upload));

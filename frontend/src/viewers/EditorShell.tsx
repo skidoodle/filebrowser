@@ -11,7 +11,7 @@ import { useState, type ReactNode } from "react";
 import { api } from "../api/client";
 import { formatBytes } from "../lib/format";
 
-export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
 
   const copy = () => {

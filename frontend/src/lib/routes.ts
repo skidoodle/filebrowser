@@ -1,5 +1,5 @@
 export type SettingsTab = "profile" | "users" | "policy" | "system" | "about";
-export type CreateKind = "dir" | "file";
+type CreateKind = "dir" | "file";
 
 export type AppRoute =
   | { page: "files"; dir: string }

@@ -15,13 +15,11 @@
   "dependencies": {
     "@cloudflare/kumo": "^2.13.2",
     "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^10.0.0",
-    "@dnd-kit/utilities": "^3.2.2",
     "@phosphor-icons/react": "^2.1.10",
     "@tanstack/react-query": "^5.102.8",
-    "@tanstack/react-virtual": "^3.14.11",
+    "@tanstack/react-virtual": "^3.14.12",
     "dompurify": "^3.4.15",
-    "marked": "^18.0.12",
+    "marked": "^18.0.13",
     "pdfjs-dist": "^6.3.289",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -29,7 +27,7 @@
     "tus-js-client": "^4.3.1",
     "utif": "^3.1.0",
     "yet-another-react-lightbox": "^3.32.2",
-    "zod": "^4.6.2",
+    "zod": "^4.6.4",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -48,5 +46,10 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.70.0",
     "vite": "^8.3.0"
+  },
+  "knip": {
+    "ignoreDependencies": [
+      "concurrently"
+    ]
   }
 }
