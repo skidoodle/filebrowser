@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { isTouchPointer } from "./pointer";
 
 export interface MarqueeCallbacks {
@@ -151,6 +151,25 @@ export function useMarquee(
     let lastTapTime = 0;
     let lastTapX = 0;
     let lastTapY = 0;
+    let startX = 0;
+    let startY = 0;
+    let moved = false;
+
+    const onSingleMove = (ev: TouchEvent) => {
+      if (ev.touches.length !== 1) return;
+      const t = ev.touches[0];
+      if (Math.abs(t.clientX - startX) > 8 || Math.abs(t.clientY - startY) > 8) {
+        moved = true;
+      }
+    };
+
+    const onSingleEnd = () => {
+      window.removeEventListener("touchmove", onSingleMove);
+      window.removeEventListener("touchend", onSingleEnd);
+      if (!moved) {
+        cbRef.current.onBackgroundClick();
+      }
+    };
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
@@ -167,49 +186,36 @@ export function useMarquee(
         lastTapTime = now;
         lastTapX = touch.clientX;
         lastTapY = touch.clientY;
-
-        const startX = touch.clientX;
-        const startY = touch.clientY;
-        let moved = false;
-
-        const onSingleMove = (ev: TouchEvent) => {
-          if (ev.touches.length !== 1) return;
-          const t = ev.touches[0];
-          if (Math.abs(t.clientX - startX) > 8 || Math.abs(t.clientY - startY) > 8) {
-            moved = true;
-          }
-        };
-
-        const onSingleEnd = () => {
-          window.removeEventListener("touchmove", onSingleMove);
-          window.removeEventListener("touchend", onSingleEnd);
-          if (!moved) {
-            cbRef.current.onBackgroundClick();
-          }
-        };
+        startX = touch.clientX;
+        startY = touch.clientY;
+        moved = false;
 
         window.addEventListener("touchmove", onSingleMove, { passive: true });
         window.addEventListener("touchend", onSingleEnd, { passive: true });
         return;
       }
 
+      window.removeEventListener("touchmove", onSingleMove);
+      window.removeEventListener("touchend", onSingleEnd);
       e.preventDefault();
       lastTapTime = 0;
       startMarquee(touch.clientX, touch.clientY, true);
     };
 
+    const onMouseDown = (e: MouseEvent) => {
+      if (isTouchPointer(e)) return;
+      if (e.button !== 0 || e.ctrlKey || e.shiftKey || e.metaKey) return;
+      if ((e.target as HTMLElement).closest("[data-file-item], button, a, input, textarea")) return;
+      startMarquee(e.clientX, e.clientY, false);
+    };
+
+    container.addEventListener("mousedown", onMouseDown);
     container.addEventListener("touchstart", onTouchStart, { passive: false });
     return () => {
+      container.removeEventListener("mousedown", onMouseDown);
       container.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onSingleMove);
+      window.removeEventListener("touchend", onSingleEnd);
     };
   }, [containerRef, startMarquee]);
-
-  const onMouseDown = (e: ReactMouseEvent) => {
-    if (isTouchPointer(e)) return;
-    if (e.button !== 0 || e.ctrlKey || e.shiftKey || e.metaKey) return;
-    if ((e.target as HTMLElement).closest("[data-file-item], button, a, input, textarea")) return;
-    startMarquee(e.clientX, e.clientY, false);
-  };
-
-  return onMouseDown;
 }

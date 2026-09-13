@@ -6,7 +6,7 @@ import { NewItemDialog } from "./components/NewItemDialog";
 import { SearchOverlay } from "./components/SearchOverlay";
 import { Sidebar } from "./components/Sidebar";
 import { UploadPanel } from "./components/UploadPanel";
-import { navigate, useRoute } from "./lib/router";
+import { navigate, useRoute, type SettingsTab } from "./lib/router";
 import { Browser } from "./pages/Browser";
 import { ViewerOverlay } from "./viewers/ViewerOverlay";
 
@@ -17,6 +17,57 @@ const AuthScreen = lazy(() =>
   import("./components/AuthScreen").then((m) => ({ default: m.AuthScreen }))
 );
 
+function getEffectiveSettingsTab(
+  settingsTab: SettingsTab | null,
+  user: { admin?: boolean; insecure?: boolean } | null | undefined
+): SettingsTab | null {
+  if (
+    (settingsTab === "users" || settingsTab === "policy" || settingsTab === "system" || settingsTab === "about") &&
+    user &&
+    !user.admin
+  ) {
+    return "profile";
+  }
+  if ((settingsTab === "users" || settingsTab === "policy") && user?.insecure) {
+    return "profile";
+  }
+  return settingsTab;
+}
+
+function useAuthGuard(
+  meData: ReturnType<typeof auth.me> extends Promise<infer T> ? T | undefined : undefined,
+  route: ReturnType<typeof useRoute>
+) {
+  const dir = route.dir;
+  const loginMode = route.page === "auth" ? route.mode : null;
+  const settingsTab = route.page === "settings" ? route.tab : null;
+  const signedIn = meData?.insecure === true || !!meData?.username;
+
+  // Onboarding an uninitialized server redirects the first visit to the create-account screen.
+  useEffect(() => {
+    if (meData && !meData.insecure && !meData.initialized && loginMode === null) {
+      navigate({ page: "auth", mode: "setup", dir }, { replace: true });
+    }
+  }, [meData, loginMode, dir]);
+
+  // Settings require a signed-in account; anonymous visitors never see the
+  // profile/users surface (the settings route is replaced with sign-in).
+  useEffect(() => {
+    if (meData && settingsTab !== null && !signedIn) {
+      navigate({ page: "auth", mode: "login", dir }, { replace: true });
+    }
+  }, [meData, settingsTab, signedIn, dir]);
+
+  // Private access policy requires sign-in for everything.
+  useEffect(() => {
+    if (meData && meData.access_policy === "private" && !signedIn && loginMode === null) {
+      navigate({ page: "auth", mode: "login", dir }, { replace: true });
+    }
+  }, [meData, signedIn, loginMode, dir]);
+
+  return { signedIn, loginMode, settingsTab };
+}
+
 export default function App() {
   const route = useRoute();
   const dir = route.dir;
@@ -25,17 +76,9 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
   const openMobileMenu = useCallback(() => setMobileMenuOpen(true), []);
-  const loginMode = route.page === "auth" ? route.mode : null;
-  const settingsTab = route.page === "settings" ? route.tab : null;
 
   const me = useQuery({ queryKey: ["me"], queryFn: auth.me, staleTime: 60_000 });
-
-  // Onboarding an uninitialized server redirects the first visit to the create-account screen.
-  useEffect(() => {
-    if (me.data && !me.data.insecure && !me.data.initialized && loginMode === null) {
-      navigate({ page: "auth", mode: "setup", dir }, { replace: true });
-    }
-  }, [me.data, loginMode, dir]);
+  const { signedIn, loginMode, settingsTab } = useAuthGuard(me.data, route);
 
   // Ctrl+K opens search.
   useEffect(() => {
@@ -54,22 +97,6 @@ export default function App() {
   const navigateToDirectory = (target: string) =>
     navigate({ page: "files", dir: target }, { replace: target === dir });
 
-  // Settings require a signed-in account; anonymous visitors never see the
-  // profile/users surface (the settings route is replaced with sign-in).
-  const signedIn = me.data?.insecure === true || !!me.data?.username;
-  useEffect(() => {
-    if (me.data && settingsTab !== null && !signedIn) {
-      navigate({ page: "auth", mode: "login", dir }, { replace: true });
-    }
-  }, [me.data, settingsTab, signedIn, dir]);
-
-  // Private access policy requires sign-in for everything.
-  useEffect(() => {
-    if (me.data && me.data.access_policy === "private" && !signedIn && loginMode === null) {
-      navigate({ page: "auth", mode: "login", dir }, { replace: true });
-    }
-  }, [me.data, signedIn, loginMode, dir]);
-
   if (loginMode !== null) {
     return (
       <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center bg-kumo-canvas"><Loader size="lg" /></div>}>
@@ -78,16 +105,7 @@ export default function App() {
     );
   }
 
-  // Admin-only settings tabs fallback to profile for regular accounts.
-  // In insecure mode, user accounts and access policy are disabled; fallback to profile.
-  const effectiveTab =
-    (settingsTab === "users" || settingsTab === "policy" || settingsTab === "system" || settingsTab === "about") &&
-      me.data &&
-      !me.data.admin
-      ? "profile"
-      : (settingsTab === "users" || settingsTab === "policy") && me.data?.insecure
-        ? "profile"
-        : settingsTab;
+  const effectiveTab = getEffectiveSettingsTab(settingsTab, me.data);
 
   return (
     <div className="flex h-full overflow-hidden">

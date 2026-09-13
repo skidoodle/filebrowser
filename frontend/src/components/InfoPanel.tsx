@@ -140,7 +140,8 @@ function MultiSummary({ paths, dir }: { paths: string[]; dir: string }) {
     queryFn: () => api.list(dir, prefs.sortBy, prefs.sortOrder),
   });
 
-  const items = (list.data?.items ?? []).filter((i) => paths.includes(i.path));
+  const pathSet = new Set(paths);
+  const items = (list.data?.items ?? []).filter((i) => pathSet.has(i.path));
   const dirs = items.filter((i) => i.isDir);
   const files = items.filter((i) => !i.isDir);
   const totalSize = items.reduce((acc, i) => acc + i.size, 0);

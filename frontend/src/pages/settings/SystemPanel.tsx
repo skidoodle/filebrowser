@@ -32,10 +32,10 @@ export function SystemPanel() {
 export function SystemSettingsForm({ initial }: { initial: SystemDynamicSettings }) {
   const queryClient = useQueryClient();
   const [guard, setGuard] = useState(initial.guard);
-  const [maxUpload, setMaxUpload] = useState(formatBytes(initial.max_upload));
-  const [maxTextSize, setMaxTextSize] = useState(formatBytes(initial.max_text_size));
+  const [maxUpload, setMaxUpload] = useState(() => formatBytes(initial.max_upload));
+  const [maxTextSize, setMaxTextSize] = useState(() => formatBytes(initial.max_text_size));
   const [requestRate, setRequestRate] = useState(initial.request_rate);
-  const [downloadRate, setDownloadRate] = useState(formatBytes(initial.download_rate));
+  const [downloadRate, setDownloadRate] = useState(() => formatBytes(initial.download_rate));
   const [powDifficulty, setPowDifficulty] = useState(initial.pow_difficulty);
   const [trustedProxies, setTrustedProxies] = useState(initial.trusted_proxies);
 

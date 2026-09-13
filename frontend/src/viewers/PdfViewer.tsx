@@ -22,9 +22,11 @@ export function PdfViewer({ path }: { path: string }) {
         container.replaceChildren();
         setPages({ total: doc.numPages, done: 0 });
 
-        for (let i = 1; i <= doc.numPages; i++) {
-          if (cancelled) return;
-          const page = await doc.getPage(i);
+        const pageNumbers = Array.from({ length: doc.numPages }, (_, idx) => idx + 1);
+        const docPages = await Promise.all(pageNumbers.map((num) => doc.getPage(num)));
+        if (cancelled) return;
+
+        const renderTasks = docPages.map((page) => {
           const base = page.getViewport({ scale: 1 });
           const scale = Math.min(1.5, Math.max(0.75, (container.clientWidth - 48) / base.width));
           const viewport = page.getViewport({ scale });
@@ -34,10 +36,15 @@ export function PdfViewer({ path }: { path: string }) {
           canvas.className = "mx-auto my-4 rounded-lg bg-white shadow-lg";
           container.appendChild(canvas);
           const ctx = canvas.getContext("2d");
-          if (!ctx) return;
-          await page.render({ canvas, canvasContext: ctx, viewport }).promise;
-          if (!cancelled) setPages({ total: doc.numPages, done: i });
-        }
+          if (!ctx) return Promise.resolve();
+          return page.render({ canvas, canvasContext: ctx, viewport }).promise.then(() => {
+            if (!cancelled) {
+              setPages((prev) => (prev ? { ...prev, done: prev.done + 1 } : null));
+            }
+          });
+        });
+
+        await Promise.all(renderTasks);
       })
       .catch(() => {
         if (!cancelled) setError(true);

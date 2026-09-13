@@ -132,7 +132,10 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ from, to }),
     }));
-    if (!res.ok) await adminError(res);
+    if (!res.ok) {
+      await adminError(res);
+      throw new Error(`Request failed: ${res.status}`);
+    }
     return res.json() as Promise<FileInfo>;
   },
 

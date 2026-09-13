@@ -166,6 +166,47 @@ interface UserFormProps {
   onSaved: () => void;
 }
 
+function isUserFormValid(
+  user: User | null | undefined,
+  username: string,
+  password: string,
+  confirm: string,
+  admin: boolean,
+  scope: string
+): boolean {
+  if (password !== confirm) return false;
+  if (!user) {
+    if (!/^[a-zA-Z0-9._-]{1,64}$/.test(username.trim())) return false;
+    return password.length >= 8;
+  }
+  if (password !== "" && password.length < 8) return false;
+  const usernameChanged = username.trim() !== user.username;
+  return usernameChanged || password !== "" || admin !== user.admin || scope !== user.scope;
+}
+
+async function saveUserRecord(
+  user: User | null | undefined,
+  data: { username: string; admin: boolean; scope: string; password: string }
+) {
+  if (user) {
+    const patch: { username?: string; admin?: boolean; scope?: string; password?: string } = {
+      admin: data.admin,
+      scope: data.scope,
+    };
+    const trimmed = data.username.trim();
+    if (trimmed !== user.username) patch.username = trimmed;
+    if (data.password) patch.password = data.password;
+    await users.update(user.id, patch);
+  } else {
+    await users.create({
+      username: data.username.trim(),
+      password: data.password,
+      admin: data.admin,
+      scope: data.scope,
+    });
+  }
+}
+
 function UserForm({ user, onClose, onSaved }: UserFormProps) {
   const [username, setUsername] = useState(user?.username ?? "");
   const [admin, setAdmin] = useState(user?.admin ?? false);
@@ -177,15 +218,7 @@ function UserForm({ user, onClose, onSaved }: UserFormProps) {
   const save = useMutation({
     mutationFn: async () => {
       setError(null);
-      if (user) {
-        const patch: { username?: string; admin?: boolean; scope?: string; password?: string } = { admin, scope };
-        const trimmed = username.trim();
-        if (trimmed !== user.username) patch.username = trimmed;
-        if (password) patch.password = password;
-        await users.update(user.id, patch);
-      } else {
-        await users.create({ username: username.trim(), password, admin, scope });
-      }
+      await saveUserRecord(user, { username, admin, scope, password });
     },
     onSuccess: () => {
       setPassword("");
@@ -196,13 +229,8 @@ function UserForm({ user, onClose, onSaved }: UserFormProps) {
     onError: (e) => setError(e instanceof Error ? e.message : String(e)),
   });
 
-  const usernameChanged = !user || username.trim() !== user.username;
   const mismatch = confirm.length > 0 && password !== confirm;
-  const valid =
-    (user ? true : /^[a-zA-Z0-9._-]{1,64}$/.test(username.trim())) &&
-    (user ? password === "" || password.length >= 8 : password.length >= 8) &&
-    password === confirm &&
-    (user ? usernameChanged || password !== "" || admin !== user.admin || scope !== user.scope : true);
+  const valid = isUserFormValid(user, username, password, confirm, admin, scope);
 
   return (
     <form

@@ -37,41 +37,24 @@ import { useUploads } from "../stores/uploads";
 import { isTouchPointer } from "../lib/pointer";
 import type { FileInfo } from "../types";
 
-interface BrowserProps {
-  onSearch: () => void;
-  onOpenMobileMenu?: () => void;
-}
-
-export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
-  const route = useRoute();
-  const dir = route.dir;
-  const prefs = usePrefs();
-  const selection = useSelection();
-  const enqueue = useUploads((s) => s.enqueue);
-  const [dragOver, setDragOver] = useState(false);
-  const dragCounter = useRef(0);
-  const [menu, setMenu] = useState<ContextMenuState | null>(null);
-  const [moveTarget, setMoveTarget] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
-  const folderInput = useRef<HTMLInputElement>(null);
-  const listingRef = useRef<HTMLDivElement>(null);
+function useBrowserMutations({
+  dir,
+  sortBy,
+  sortOrder,
+  onDeleteSuccess,
+}: {
+  dir: string;
+  sortBy: any;
+  sortOrder: any;
+  onDeleteSuccess: () => void;
+}) {
   const queryClient = useQueryClient();
-
-  const me = useQuery({ queryKey: ["me"], queryFn: auth.me, staleTime: 60_000 });
-  const canWriteHere = canWriteIn(me.data, dir);
-
-  const list = useQuery({
-    queryKey: ["list", dir, prefs.sortBy, prefs.sortOrder],
-    queryFn: () => api.list(dir, prefs.sortBy, prefs.sortOrder),
-  });
-
-  const items = useMemo(() => list.data?.items ?? [], [list.data]);
 
   const privateToggle = useMutation({
     mutationFn: ({ path, makePrivate }: { path: string; makePrivate: boolean }) =>
       makePrivate ? auth.setPrivate(path) : auth.unsetPrivate(path),
     onMutate: async ({ path, makePrivate }) => {
-      const targetQueryKey = ["list", dir, prefs.sortBy, prefs.sortOrder];
+      const targetQueryKey = ["list", dir, sortBy, sortOrder];
       await queryClient.cancelQueries({ queryKey: targetQueryKey });
       const previousList = queryClient.getQueryData<{ path: string; items: FileInfo[] }>(targetQueryKey);
       if (previousList) {
@@ -97,7 +80,7 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
   const del = useMutation({
     mutationFn: (paths: string[]) => api.delete(paths),
     onMutate: async (paths: string[]) => {
-      const targetQueryKey = ["list", dir, prefs.sortBy, prefs.sortOrder];
+      const targetQueryKey = ["list", dir, sortBy, sortOrder];
       await queryClient.cancelQueries({ queryKey: targetQueryKey });
       const previousList = queryClient.getQueryData<{ path: string; items: FileInfo[] }>(targetQueryKey);
       if (previousList) {
@@ -107,8 +90,7 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
           items: previousList.items.filter((item) => !pathSet.has(item.path)),
         });
       }
-      selection.clear();
-      setConfirmDelete(null);
+      onDeleteSuccess();
       return { previousList, targetQueryKey };
     },
     onError: (_err, _paths, context) => {
@@ -122,7 +104,319 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
     },
   });
 
-  const marquee = useMarquee(listingRef, {
+  return { privateToggle, del };
+}
+
+function buildItemContextMenuEntries({
+  file,
+  targets,
+  canWriteItem,
+  dir,
+  onOpen,
+  onTogglePrivate,
+  onMove,
+  onDelete,
+  onProperties,
+  onCopyLink,
+}: {
+  file: FileInfo;
+  targets: string[];
+  canWriteItem: boolean;
+  dir: string;
+  onOpen: () => void;
+  onTogglePrivate: () => void;
+  onMove: () => void;
+  onDelete: () => void;
+  onProperties: () => void;
+  onCopyLink: () => void;
+}): (MenuEntry | null)[] {
+  return [
+    { label: "Open", icon: <ArrowSquareOutIcon size={16} />, onSelect: onOpen },
+    {
+      label: file.isDir ? "Download as zip" : "Download",
+      icon: <DownloadSimpleIcon size={16} />,
+      onSelect: () => {
+        if (file.isDir) {
+          window.location.assign(api.downloadUrl(dir, [file.name]));
+        } else {
+          window.location.assign(api.rawUrl(file.path));
+        }
+      },
+    },
+    ...(file.isDir && canWriteItem
+      ? ([
+        {
+          label: file.private ? "Make public" : "Make private",
+          icon: file.private ? <EyeIcon size={16} /> : <EyeSlashIcon size={16} />,
+          onSelect: onTogglePrivate,
+        },
+      ] satisfies (MenuEntry | null)[])
+      : []),
+    ...(canWriteItem
+      ? ([
+        null,
+        {
+          label: "Rename / move",
+          icon: <PencilSimpleIcon size={16} />,
+          onSelect: onMove,
+        },
+        {
+          label: targets.length > 1 ? `Delete ${targets.length} items` : "Delete",
+          icon: <TrashSimpleIcon size={16} />,
+          danger: true,
+          onSelect: onDelete,
+        },
+      ] satisfies (MenuEntry | null)[])
+      : []),
+    null,
+    {
+      label: "Properties",
+      icon: <InfoIcon size={16} />,
+      onSelect: onProperties,
+    },
+    { label: "Copy link", icon: <LinkSimpleIcon size={16} />, onSelect: onCopyLink },
+  ];
+}
+
+function buildBackgroundContextMenuEntries({
+  canWriteHere,
+  dir,
+  onUploadClick,
+  onSelectAll,
+}: {
+  canWriteHere: boolean;
+  dir: string;
+  onUploadClick: () => void;
+  onSelectAll: () => void;
+}): (MenuEntry | null)[] {
+  return [
+    ...(canWriteHere
+      ? ([
+        {
+          label: "New folder",
+          icon: <FolderPlusIcon size={16} />,
+          onSelect: () => navigate({ page: "create", kind: "dir", dir }),
+        },
+        {
+          label: "New file",
+          icon: <FilePlusIcon size={16} />,
+          onSelect: () => navigate({ page: "create", kind: "file", dir }),
+        },
+        { label: "Upload files", icon: <UploadSimpleIcon size={16} />, onSelect: onUploadClick },
+        null,
+      ] satisfies (MenuEntry | null)[])
+      : []),
+    { label: "Select all", icon: <CheckSquareIcon size={16} />, onSelect: onSelectAll },
+    {
+      label: "Download folder",
+      icon: <DownloadSimpleIcon size={16} />,
+      onSelect: () => window.location.assign(api.downloadUrl(dir)),
+    },
+  ];
+}
+
+function useFileDrop(canWriteHere: boolean, dir: string, onUpload: (dir: string, files: File[]) => void) {
+  const [dragOver, setDragOver] = useState(false);
+  const dragCounter = useRef(0);
+
+  const onDragEnter = (e: DragEvent) => {
+    e.preventDefault();
+    if (!e.dataTransfer.types || !Array.from(e.dataTransfer.types).includes("Files")) return;
+    dragCounter.current++;
+    setDragOver(true);
+  };
+
+  const onDragOver = (e: DragEvent) => e.preventDefault();
+
+  const onDragLeave = () => {
+    dragCounter.current--;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setDragOver(false);
+    }
+  };
+
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    dragCounter.current = 0;
+    if (!canWriteHere) return;
+    if (!e.dataTransfer.types || !Array.from(e.dataTransfer.types).includes("Files")) return;
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) onUpload(dir, files);
+  };
+
+  return { dragOver, onDragEnter, onDragOver, onDragLeave, onDrop };
+}
+
+function downloadFiles(dir: string, selectedInfos: FileInfo[]) {
+  if (selectedInfos.length === 0) return;
+  if (selectedInfos.length === 1 && !selectedInfos[0].isDir) {
+    window.location.assign(api.rawUrl(selectedInfos[0].path));
+    return;
+  }
+  window.location.assign(api.downloadUrl(dir, selectedInfos.map((i) => i.name)));
+}
+
+function copyFileLink(file: FileInfo) {
+  const url = file.isDir
+    ? new URL(routePath({ page: "files", dir: file.path }), window.location.origin).href
+    : `${window.location.origin}${api.rawUrl(file.path)}`;
+  void navigator.clipboard.writeText(url);
+}
+
+function BrowserListingContent({
+  isPending,
+  isError,
+  errorMessage,
+  items,
+  viewMode,
+  selected,
+  selectEntry,
+  open,
+  itemContextMenu,
+  listingRef,
+}: {
+  isPending: boolean;
+  isError: boolean;
+  errorMessage?: string;
+  items: FileInfo[];
+  viewMode: "list" | "mosaic" | "gallery";
+  selected: Set<string>;
+  selectEntry: (file: FileInfo, additive: boolean) => void;
+  open: (file: FileInfo) => void;
+  itemContextMenu: (
+    file: FileInfo,
+    e: ReactMouseEvent | { clientX: number; clientY: number; preventDefault?: () => void; stopPropagation?: () => void },
+  ) => void;
+  listingRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  if (isPending) return <Loader className="mx-auto mt-16" />;
+  if (isError) return <p className="text-kumo-danger mt-8">{errorMessage}</p>;
+  if (items.length === 0) {
+    return (
+      <Empty
+        title="Nothing here yet"
+        description="Drag & drop files anywhere on this page to upload them."
+      />
+    );
+  }
+
+  if (viewMode === "list") {
+    return (
+      <FileTable
+        items={items}
+        selected={selected}
+        onSelect={selectEntry}
+        onOpen={open}
+        onMenu={itemContextMenu}
+        scrollRef={listingRef}
+      />
+    );
+  }
+
+  if (viewMode === "mosaic") {
+    return (
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3">
+        {items.map((file) => (
+          <FileCard
+            key={file.path}
+            file={file}
+            selected={selected.has(file.path)}
+            onSelect={selectEntry}
+            onOpen={open}
+            onMenu={itemContextMenu}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <GalleryGrid
+      items={items.filter((f) => f.type === "image")}
+      selected={selected}
+      onSelect={selectEntry}
+      onOpen={open}
+      onMenu={itemContextMenu}
+    />
+  );
+}
+
+function BrowserDialogs({
+  menu,
+  onCloseMenu,
+  moveTarget,
+  onCloseMove,
+  confirmDelete,
+  deleteLoading,
+  onCloseDelete,
+  onConfirmDelete,
+}: {
+  menu: ContextMenuState | null;
+  onCloseMenu: () => void;
+  moveTarget: string | null;
+  onCloseMove: () => void;
+  confirmDelete: string[] | null;
+  deleteLoading: boolean;
+  onCloseDelete: () => void;
+  onConfirmDelete: () => void;
+}) {
+  return (
+    <>
+      <ContextMenu menu={menu} onClose={onCloseMenu} />
+      {moveTarget !== null && (
+        <MoveDialog key={moveTarget} from={moveTarget} onClose={onCloseMove} />
+      )}
+      <DeleteDialog
+        paths={confirmDelete}
+        loading={deleteLoading}
+        onClose={onCloseDelete}
+        onConfirm={onConfirmDelete}
+      />
+    </>
+  );
+}
+
+interface BrowserProps {
+  onSearch: () => void;
+  onOpenMobileMenu?: () => void;
+}
+
+export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
+  const route = useRoute();
+  const dir = route.dir;
+  const prefs = usePrefs();
+  const selection = useSelection();
+  const enqueue = useUploads((s) => s.enqueue);
+  const [menu, setMenu] = useState<ContextMenuState | null>(null);
+  const [moveTarget, setMoveTarget] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
+  const listingRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
+  const me = useQuery({ queryKey: ["me"], queryFn: auth.me, staleTime: 60_000 });
+  const canWriteHere = canWriteIn(me.data, dir);
+
+  const list = useQuery({
+    queryKey: ["list", dir, prefs.sortBy, prefs.sortOrder],
+    queryFn: () => api.list(dir, prefs.sortBy, prefs.sortOrder),
+  });
+
+  const items = useMemo(() => list.data?.items ?? [], [list.data]);
+
+  const { privateToggle, del } = useBrowserMutations({
+    dir,
+    sortBy: prefs.sortBy,
+    sortOrder: prefs.sortOrder,
+    onDeleteSuccess: () => {
+      selection.clear();
+      setConfirmDelete(null);
+    },
+  });
+
+  useMarquee(listingRef, {
     getCurrentSelection: () => selection.selected,
     onSelectionChange: (paths) => selection.selectAll(paths),
     onBackgroundClick: () => selection.clear(),
@@ -163,35 +457,18 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
     }
   };
 
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    dragCounter.current = 0;
-    if (!canWriteHere) return; // uploads need write access here
-    if (!e.dataTransfer.types || !Array.from(e.dataTransfer.types).includes("Files")) return;
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) enqueue(dir, files);
-  };
+  const { dragOver, onDragEnter, onDragOver, onDragLeave, onDrop } = useFileDrop(
+    canWriteHere,
+    dir,
+    enqueue,
+  );
 
   const selectedInfos = items.filter((i) => selected.has(i.path));
   const canDownload = selectedInfos.length > 0;
   const allSelected = items.length > 0 && selected.size === items.length;
 
-  const downloadSelection = () => {
-    if (selectedInfos.length === 0) return;
-    if (selectedInfos.length === 1 && !selectedInfos[0].isDir) {
-      window.location.assign(api.rawUrl(selectedInfos[0].path));
-      return;
-    }
-    window.location.assign(api.downloadUrl(dir, selectedInfos.map((i) => i.name)));
-  };
-
-  const copyLink = (file: FileInfo) => {
-    const url = file.isDir
-      ? new URL(routePath({ page: "files", dir: file.path }), window.location.origin).href
-      : `${window.location.origin}${api.rawUrl(file.path)}`;
-    void navigator.clipboard.writeText(url);
-  };
+  const downloadSelection = () => downloadFiles(dir, selectedInfos);
+  const copyLink = (file: FileInfo) => copyFileLink(file);
 
   const itemContextMenu = (
     file: FileInfo,
@@ -204,55 +481,20 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
     }
     const targets = selected.has(file.path) ? [...selected] : [file.path];
     const canWriteItem = canWritePath(me.data, file.path);
-    const entries: (MenuEntry | null)[] = [
-      { label: "Open", icon: <ArrowSquareOutIcon size={16} />, onSelect: () => open(file) },
-      {
-        label: file.isDir ? "Download as zip" : "Download",
-        icon: <DownloadSimpleIcon size={16} />,
-        onSelect: () => {
-          if (file.isDir) {
-            window.location.assign(api.downloadUrl(dir, [file.name]));
-          } else {
-            window.location.assign(api.rawUrl(file.path));
-          }
-        },
+    const entries = buildItemContextMenuEntries({
+      file,
+      targets,
+      canWriteItem,
+      dir,
+      onOpen: () => open(file),
+      onTogglePrivate: () => privateToggle.mutate({ path: file.path, makePrivate: !file.private }),
+      onMove: () => setMoveTarget(file.path),
+      onDelete: () => setConfirmDelete(targets),
+      onProperties: () => {
+        if (!prefs.infoPanel) prefs.toggleInfoPanel();
       },
-      // Privacy toggle for directories the caller may write.
-      ...(file.isDir && canWriteItem
-        ? ([
-          {
-            label: file.private ? "Make public" : "Make private",
-            icon: file.private ? <EyeIcon size={16} /> : <EyeSlashIcon size={16} />,
-            onSelect: () => privateToggle.mutate({ path: file.path, makePrivate: !file.private }),
-          },
-        ] satisfies (MenuEntry | null)[])
-        : []),
-      ...(canWriteItem
-        ? ([
-          null,
-          {
-            label: "Rename / move",
-            icon: <PencilSimpleIcon size={16} />,
-            onSelect: () => setMoveTarget(file.path),
-          },
-          {
-            label: targets.length > 1 ? `Delete ${targets.length} items` : "Delete",
-            icon: <TrashSimpleIcon size={16} />,
-            danger: true,
-            onSelect: () => setConfirmDelete(targets),
-          },
-        ] satisfies (MenuEntry | null)[])
-        : []),
-      null,
-      {
-        label: "Properties",
-        icon: <InfoIcon size={16} />,
-        onSelect: () => {
-          if (!prefs.infoPanel) prefs.toggleInfoPanel();
-        },
-      },
-      { label: "Copy link", icon: <LinkSimpleIcon size={16} />, onSelect: () => copyLink(file) },
-    ];
+      onCopyLink: () => copyLink(file),
+    });
     setMenu({ x: e.clientX, y: e.clientY, entries });
   };
 
@@ -262,30 +504,12 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
     setMenu({
       x: e.clientX,
       y: e.clientY,
-      entries: [
-        ...(canWriteHere
-          ? ([
-            {
-              label: "New folder",
-              icon: <FolderPlusIcon size={16} />,
-              onSelect: () => navigate({ page: "create", kind: "dir", dir }),
-            },
-            {
-              label: "New file",
-              icon: <FilePlusIcon size={16} />,
-              onSelect: () => navigate({ page: "create", kind: "file", dir }),
-            },
-            { label: "Upload files", icon: <UploadSimpleIcon size={16} />, onSelect: () => folderInput.current?.click() },
-            null,
-          ] satisfies (MenuEntry | null)[])
-          : []),
-        { label: "Select all", icon: <CheckSquareIcon size={16} />, onSelect: () => selection.selectAll(items.map((i) => i.path)) },
-        {
-          label: "Download folder",
-          icon: <DownloadSimpleIcon size={16} />,
-          onSelect: () => window.location.assign(api.downloadUrl(dir)),
-        },
-      ],
+      entries: buildBackgroundContextMenuEntries({
+        canWriteHere,
+        dir,
+        onUploadClick: () => folderInput.current?.click(),
+        onSelectAll: () => selection.selectAll(items.map((i) => i.path)),
+      }),
     });
   };
 
@@ -315,23 +539,10 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
           <main
             ref={listingRef}
             className="relative min-w-0 flex-1 overflow-y-auto scrollbar-gutter-stable p-3 select-none touch-manipulation overscroll-contain md:p-4"
-            onDragEnter={(e) => {
-              e.preventDefault();
-              if (!e.dataTransfer.types || !Array.from(e.dataTransfer.types).includes("Files")) return;
-              dragCounter.current++;
-              setDragOver(true);
-            }}
-            onDragOver={(e) => e.preventDefault()}
-            onDragLeave={(e) => {
-              if (!e.dataTransfer.types || !Array.from(e.dataTransfer.types).includes("Files")) return;
-              dragCounter.current--;
-              if (dragCounter.current <= 0) {
-                dragCounter.current = 0;
-                setDragOver(false);
-              }
-            }}
+            onDragEnter={onDragEnter}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
             onDrop={onDrop}
-            onMouseDown={marquee}
             onContextMenu={backgroundMenu}
           >
             <div className="flex items-center gap-2">
@@ -343,51 +554,18 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
               )}
             </div>
 
-            {list.isPending && <Loader className="mx-auto mt-16" />}
-            {list.isError && <p className="text-kumo-danger mt-8">{list.error.message}</p>}
-
-            {!list.isPending && !list.isError && items.length === 0 && (
-              <Empty
-                title="Nothing here yet"
-                description="Drag & drop files anywhere on this page to upload them."
-              />
-            )}
-
-            {items.length > 0 && prefs.viewMode === "list" && (
-              <FileTable
-                items={items}
-                selected={selected}
-                onSelect={selectEntry}
-                onOpen={open}
-                onMenu={itemContextMenu}
-                scrollRef={listingRef}
-              />
-            )}
-
-            {items.length > 0 && prefs.viewMode === "mosaic" && (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3">
-                {items.map((file) => (
-                  <FileCard
-                    key={file.path}
-                    file={file}
-                    selected={selected.has(file.path)}
-                    onSelect={selectEntry}
-                    onOpen={open}
-                    onMenu={itemContextMenu}
-                  />
-                ))}
-              </div>
-            )}
-
-            {items.length > 0 && prefs.viewMode === "gallery" && (
-              <GalleryGrid
-                items={items.filter((f) => f.type === "image")}
-                selected={selected}
-                onSelect={selectEntry}
-                onOpen={open}
-                onMenu={itemContextMenu}
-              />
-            )}
+            <BrowserListingContent
+              isPending={list.isPending}
+              isError={list.isError}
+              errorMessage={list.error?.message}
+              items={items}
+              viewMode={prefs.viewMode}
+              selected={selected}
+              selectEntry={selectEntry}
+              open={open}
+              itemContextMenu={itemContextMenu}
+              listingRef={listingRef}
+            />
 
             <DropUploadOverlay visible={dragOver} />
           </main>
@@ -396,17 +574,15 @@ export function Browser({ onSearch, onOpenMobileMenu }: BrowserProps) {
         {prefs.infoPanel && <InfoPanel paths={infoSelection} dir={dir} />}
       </div>
 
-      <ContextMenu menu={menu} onClose={() => setMenu(null)} />
-
-      {moveTarget !== null && (
-        <MoveDialog key={moveTarget} from={moveTarget} onClose={() => setMoveTarget(null)} />
-      )}
-
-      <DeleteDialog
-        paths={confirmDelete}
-        loading={del.isPending}
-        onClose={() => setConfirmDelete(null)}
-        onConfirm={() => confirmDelete !== null && del.mutate(confirmDelete)}
+      <BrowserDialogs
+        menu={menu}
+        onCloseMenu={() => setMenu(null)}
+        moveTarget={moveTarget}
+        onCloseMove={() => setMoveTarget(null)}
+        confirmDelete={confirmDelete}
+        deleteLoading={del.isPending}
+        onCloseDelete={() => setConfirmDelete(null)}
+        onConfirmDelete={() => confirmDelete !== null && del.mutate(confirmDelete)}
       />
 
       <input

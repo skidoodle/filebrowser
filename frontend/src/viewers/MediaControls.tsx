@@ -3,10 +3,10 @@ import { Button, DropdownMenu, Tooltip } from "@cloudflare/kumo";
 import type { CSSProperties, ReactNode } from "react";
 import { MenuItemRow } from "../components/MenuItemRow";
 
-export const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 
 /** Formats seconds as M:SS or H:MM:SS. */
-export function formatTime(s: number): string {
+function formatTime(s: number): string {
   if (!Number.isFinite(s) || s < 0) return "0:00";
   const total = Math.floor(s);
   const h = Math.floor(total / 3600);
@@ -137,7 +137,7 @@ export function RateMenu({ rate, onRate, dark = false }: RateMenuProps) {
   );
 }
 
-export const onVideo = (...parts: (string | false | undefined)[]): string =>
+const onVideo = (...parts: (string | false | undefined)[]): string =>
   ["text-white/90", "hover:bg-white/15!", "focus-visible:ring-white/60!", ...parts].filter(Boolean).join(" ");
 
 export function MediaButton({

@@ -14,9 +14,10 @@ if (typeof window !== "undefined") {
  * Returns true if the event was initiated by a touch interaction.
  * Used to prevent touch gestures from triggering mouse right-click context menus.
  */
-export function isTouchPointer(e?: { nativeEvent?: Event }): boolean {
-  if (e?.nativeEvent && "pointerType" in e.nativeEvent) {
-    return (e.nativeEvent as PointerEvent).pointerType === "touch";
+export function isTouchPointer(e?: { nativeEvent?: Event } | Event): boolean {
+  const ev = e && "nativeEvent" in e ? e.nativeEvent : e;
+  if (ev && "pointerType" in ev) {
+    return (ev as PointerEvent).pointerType === "touch";
   }
   return lastPointerType === "touch";
 }

@@ -18,19 +18,44 @@ interface ResultGroup {
   items: FileInfo[];
 }
 
+function useDebouncedValue(value: string, delayMs: number): string {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
+}
+
+function SearchScopeToggle({
+  currentDir,
+  scoped,
+  onToggle,
+}: {
+  currentDir?: string;
+  scoped: boolean;
+  onToggle: () => void;
+}) {
+  if (!currentDir || currentDir === ".") return null;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="text-kumo-info hover:underline cursor-pointer mr-auto text-xs font-medium"
+    >
+      {scoped ? `Scope: /${currentDir} (click for all)` : "Scope: All files (click for folder)"}
+    </button>
+  );
+}
+
 export function SearchOverlay({ open, onOpenChange, onSelect, currentDir }: SearchOverlayProps) {
   const [query, setQuery] = useState("");
-  const [debounced, setDebounced] = useState("");
+  const debounced = useDebouncedValue(query, 150);
   const [scopedOverride, setScopedOverride] = useState<boolean | null>(null);
 
   const hasDir = Boolean(currentDir && currentDir !== ".");
   const scoped = scopedOverride !== null ? scopedOverride : hasDir;
   const activePath = scoped && hasDir ? currentDir : undefined;
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(query), 150);
-    return () => clearTimeout(t);
-  }, [query]);
 
   const search = useQuery({
     queryKey: ["search", debounced, activePath],
@@ -99,17 +124,11 @@ export function SearchOverlay({ open, onOpenChange, onSelect, currentDir }: Sear
         )}
       </CommandPalette.List>
       <CommandPalette.Footer>
-        {currentDir && currentDir !== "." && (
-          <button
-            type="button"
-            onClick={() => setScopedOverride((s) => (s !== null ? !s : !hasDir))}
-            className="text-kumo-info hover:underline cursor-pointer mr-auto text-xs font-medium"
-          >
-            {scoped
-              ? `Scope: /${currentDir} (click for all)`
-              : "Scope: All files (click for folder)"}
-          </button>
-        )}
+        <SearchScopeToggle
+          currentDir={currentDir}
+          scoped={scoped}
+          onToggle={() => setScopedOverride((s) => (s !== null ? !s : !hasDir))}
+        />
         <span>↑↓ navigate</span>
         <span>↵ open</span>
         <span>esc close</span>

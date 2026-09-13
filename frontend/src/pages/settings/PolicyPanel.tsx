@@ -76,9 +76,8 @@ export function PolicyPanel() {
           const isSelected = selected === opt.id;
           const isActive = opt.id === currentPolicy;
           return (
-            <div
+            <label
               key={opt.id}
-              onClick={() => setOverride(opt.id)}
               className={`bg-kumo-base ring-kumo-hairline flex min-h-22 cursor-pointer items-start gap-4 rounded-xl p-5 ring-1 transition-colors ${isSelected
                 ? "ring-kumo-brand ring-2 bg-kumo-brand-tint/10"
                 : "hover:bg-kumo-tint/20"
@@ -87,6 +86,7 @@ export function PolicyPanel() {
               <input
                 type="radio"
                 name="access_policy"
+                aria-label={opt.title}
                 checked={isSelected}
                 onChange={() => setOverride(opt.id)}
                 className="mt-1 cursor-pointer accent-kumo-brand"
@@ -111,7 +111,7 @@ export function PolicyPanel() {
                   {opt.description}
                 </p>
               </div>
-            </div>
+            </label>
           );
         })}
       </div>

@@ -8,14 +8,18 @@ import "yet-another-react-lightbox/plugins/captions.css";
 import "yet-another-react-lightbox/plugins/counter.css";
 import { DownloadSimpleIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "../api/client";
 import { usePrefs } from "../stores/prefs";
 import type { FileInfo } from "../types";
 
 async function decodeTiff(url: string): Promise<string> {
   const UTIF = (await import("utif")).default;
-  const buffer = await fetch(url).then((r) => r.arrayBuffer());
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch TIFF image: ${res.status}`);
+  }
+  const buffer = await res.arrayBuffer();
   const ifds = UTIF.decode(buffer);
   if (ifds.length === 0) throw new Error("no IFD in TIFF");
   UTIF.decodeImage(buffer, ifds[0]);
@@ -78,8 +82,6 @@ export function ImageViewer({
   onClose: () => void;
 }) {
   const prefs = usePrefs();
-  const [error, setError] = useState<string | null>(null);
-  const [tiffSrc, setTiffSrc] = useState<string | null>(null);
   const [active, setActive] = useState(0);
 
   const isTiff = NON_NATIVE_IMAGES.has((extension ?? "").toLowerCase());
@@ -94,20 +96,14 @@ export function ImageViewer({
   });
 
   // TIFF has no native browser support; decode to a PNG data URL first.
-  useEffect(() => {
-    if (!isTiff) return;
-    let cancelled = false;
-    decodeTiff(api.rawUrl(path, true))
-      .then((s) => {
-        if (!cancelled) setTiffSrc(s);
-      })
-      .catch((e: Error) => {
-        if (!cancelled) setError(e.message);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isTiff, path]);
+  const tiff = useQuery({
+    queryKey: ["tiff", path],
+    queryFn: () => decodeTiff(api.rawUrl(path, true)),
+    enabled: isTiff,
+    staleTime: Infinity,
+  });
+  const tiffSrc = tiff.data ?? null;
+  const error = tiff.error instanceof Error ? tiff.error.message : null;
 
   const { slides, paths, index } = useMemo((): { slides: LightboxSlide[]; paths: string[]; index: number } => {
     if (isTiff) {

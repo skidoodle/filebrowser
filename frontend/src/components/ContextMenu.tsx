@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useEffectEvent } from "react";
 
 export interface MenuEntry {
   label: string;
@@ -20,12 +20,16 @@ interface ContextMenuProps {
 }
 
 export function ContextMenu({ menu, onClose }: ContextMenuProps) {
+  const handleClose = useEffectEvent(() => {
+    onClose();
+  });
+
   useEffect(() => {
     if (!menu) return;
 
-    const close = () => onClose();
+    const close = () => handleClose();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") handleClose();
     };
 
     window.addEventListener("click", close);
@@ -38,7 +42,7 @@ export function ContextMenu({ menu, onClose }: ContextMenuProps) {
       window.removeEventListener("scroll", close, true);
       window.removeEventListener("keydown", onKey);
     };
-  }, [menu, onClose]);
+  }, [menu]);
 
   if (!menu) return null;
 

@@ -45,27 +45,24 @@ const LANG_LABELS: Record<string, string> = {
 /** Files above this size skip Shiki highlighting and render as plain text. */
 const PLAIN_TEXT_MAX = 2 * 1024 * 1024;
 
-export function CodeViewer({
-  path,
-  extension,
-  size,
-}: {
-  path: string;
-  extension?: string;
-  size?: number;
-}) {
+function getFileLanguageInfo(path: string, extension?: string, size?: number, codeLength = 0) {
+  const fileName = path.split("/").pop() ?? "";
+  const ext = (extension || (fileName.includes(".") ? fileName.split(".").pop() : fileName) || "").toLowerCase();
+  const lang = EXT_TO_LANG[ext] ?? "";
+  const isPlain = !lang || lang === "plaintext" || ext === "txt" || ext === "text" || ext === "log";
+  const effectiveSize = size ?? codeLength;
+  const highlight = !isPlain && effectiveSize <= PLAIN_TEXT_MAX;
+
+  const langLabel = !highlight
+    ? "Plain text"
+    : (LANG_LABELS[lang] ?? (lang ? lang.charAt(0).toUpperCase() + lang.slice(1) : "Text"));
+
+  return { lang, highlight, langLabel };
+}
+
+function useCodeContent(path: string) {
   const [code, setCode] = useState<string | null>(null);
-  const route = useRoute();
-
-  const [draft, setDraft] = useState<string | null>(
-    route.page === "viewer" && route.edit ? "" : null,
-  );
   const [error, setError] = useState<string | null>(null);
-  const queryClient = useQueryClient();
-
-  const me = useQuery({ queryKey: ["me"], queryFn: auth.me, staleTime: 60_000 });
-  const hasToken = hasEditToken(path);
-  const canEdit = canWritePath(me.data, path) || hasToken || draft !== null;
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +81,30 @@ export function CodeViewer({
       cancelled = true;
     };
   }, [path]);
+
+  return { code, setCode, error };
+}
+
+export function CodeViewer({
+  path,
+  extension,
+  size,
+}: {
+  path: string;
+  extension?: string;
+  size?: number;
+}) {
+  const { code, setCode, error } = useCodeContent(path);
+  const route = useRoute();
+
+  const [draft, setDraft] = useState<string | null>(
+    route.page === "viewer" && route.edit ? "" : null,
+  );
+  const queryClient = useQueryClient();
+
+  const me = useQuery({ queryKey: ["me"], queryFn: auth.me, staleTime: 60_000 });
+  const hasToken = hasEditToken(path);
+  const canEdit = canWritePath(me.data, path) || hasToken || draft !== null;
 
   const save = useMutation({
     mutationFn: async ({ exit = true }: { exit?: boolean } = {}) => {
@@ -119,16 +140,7 @@ export function CodeViewer({
   if (error) return <p className="text-kumo-danger p-6">{error}</p>;
   if (code === null) return <p className="text-kumo-subtle p-6">loading…</p>;
 
-  const fileName = path.split("/").pop() ?? "";
-  const ext = (extension || (fileName.includes(".") ? fileName.split(".").pop() : fileName) || "").toLowerCase();
-  const lang = EXT_TO_LANG[ext] ?? "";
-  const isPlain = !lang || lang === "plaintext" || ext === "txt" || ext === "text" || ext === "log";
-  const effectiveSize = size ?? (code !== null ? code.length : 0);
-  const highlight = !isPlain && effectiveSize <= PLAIN_TEXT_MAX;
-
-  const langLabel = !highlight
-    ? "Plain text"
-    : (LANG_LABELS[lang] ?? (lang ? lang.charAt(0).toUpperCase() + lang.slice(1) : "Text"));
+  const { lang, highlight, langLabel } = getFileLanguageInfo(path, extension, size, code.length);
 
   return (
     <EditorShell
@@ -147,6 +159,7 @@ export function CodeViewer({
     >
       {draft !== null ? (
         <textarea
+          aria-label={`Editing ${path}`}
           autoFocus
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
