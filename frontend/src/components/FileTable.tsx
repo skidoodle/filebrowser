@@ -112,7 +112,7 @@ function FileRow({ file, isSelected, onSelect, onOpen, onMenu }: FileRowProps) {
         if (isTouchPointer(e)) return;
         onMenu(file, e);
       }}
-      className={`border-kumo-hairline hover:bg-kumo-tint cursor-grab active:cursor-grabbing border-b select-none touch-manipulation ${isSelected ? "bg-kumo-info-tint/50" : ""
+      className={`border-kumo-hairline hover:bg-kumo-tint cursor-pointer border-b select-none touch-manipulation ${isSelected ? "bg-kumo-info-tint/50" : ""
         } ${drag.isDragging ? "opacity-30 outline-2 outline-dashed outline-kumo-info" : ""} ${drop.isOver ? "bg-kumo-success-tint/70 shadow-inner" : ""
         }`}
     >

@@ -41,7 +41,7 @@ export function FileCard({ file, selected, onSelect, onOpen, onMenu }: FileCardP
         if (isTouchPointer(e)) return;
         onMenu(file, e);
       }}
-      className={`bg-kumo-base ring-kumo-hairline relative flex cursor-grab active:cursor-grabbing items-start gap-3 rounded-xl p-4 ring-1 transition-shadow hover:shadow-md select-none touch-manipulation ${selected ? "ring-2 ring-kumo-info" : ""
+      className={`bg-kumo-base ring-kumo-hairline relative flex cursor-pointer items-start gap-3 rounded-xl p-4 ring-1 transition-shadow hover:shadow-md select-none touch-manipulation ${selected ? "ring-2 ring-kumo-info" : ""
         } ${drag.isDragging ? "opacity-30 outline-2 outline-dashed outline-kumo-info" : ""} ${drop.isOver ? "scale-[1.03] ring-2 ring-kumo-success shadow-lg" : ""
         }`}
     >
